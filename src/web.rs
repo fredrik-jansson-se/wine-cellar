@@ -1,3 +1,4 @@
+use axum::response::IntoResponseParts;
 use base64::Engine;
 use maud::Markup;
 
@@ -20,7 +21,14 @@ pub async fn run(db: sqlx::SqlitePool) -> anyhow::Result<()> {
             "/wines/{wine_id}/image",
             axum::routing::post(post_wine_image),
         )
-        .route("/wines/{wine_id}/grapes", axum::routing::post(wine_grapes))
+        .route(
+            "/wines/{wine_id}/grapes",
+            axum::routing::get(edit_wine_grapes),
+        )
+        .route(
+            "/wines/{wine_id}/grapes",
+            axum::routing::post(post_wine_grapes),
+        )
         .route("/wines/{wine_id}", axum::routing::get(wine_information))
         .route("/wines", axum::routing::get(wine_table))
         .with_state(state);
@@ -86,6 +94,7 @@ async fn wine_table(axum::extract::State(state): axum::extract::State<State>) ->
         year: i64,
         num_bottles: i64,
         thumbnail: Option<String>,
+        grapes: Vec<String>,
     }
 
     for wine in wines {
@@ -93,12 +102,16 @@ async fn wine_table(axum::extract::State(state): axum::extract::State<State>) ->
             .await
             .expect("Get inventory");
         let inventory: i64 = inv_events.iter().map(|ie| ie.bottles).sum();
+        let wine_grapes = crate::db::get_wine_grapes(&state.db, wine.id)
+            .await
+            .expect("Get wine grapes");
         disp_wines.push(MainWine {
             id: wine.id,
             name: wine.name,
             year: wine.year,
             num_bottles: inventory,
             thumbnail: wine.image_thumbnail_b64,
+            grapes: wine_grapes,
         });
     }
 
@@ -112,6 +125,7 @@ async fn wine_table(axum::extract::State(state): axum::extract::State<State>) ->
                     th { "Name" }
                     th { "Year" }
                     th { "Bottles" }
+                    th { "Grapes" }
                     th {}
                 }
             }
@@ -133,6 +147,15 @@ async fn wine_table(axum::extract::State(state): axum::extract::State<State>) ->
                         td {(w.year)}
                         td {(w.num_bottles)}
                         td {
+                            ul {
+                                @for grape in w.grapes {
+                                    li {
+                                        (grape)
+                                    }
+                                }
+                            }
+                        }
+                        td {
                             div class="dropdown" {
                                 button class="btn btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" {
                                     "Action"
@@ -140,6 +163,7 @@ async fn wine_table(axum::extract::State(state): axum::extract::State<State>) ->
                                 ul class="dropdown-menu" {
                                     li { a class="dropdown-item" { "Drink" } }
                                     li { a class="dropdown-item" { "Buy" } }
+                                    li { a class="dropdown-item" hx-target="#main" hx-get=(format!("/wines/{}/grapes", w.id))  { "Grapes" } }
                                     li { a hx-trigger="click" hx-target="#main" hx-get=(format!("/wines/{}/image", w.id)) class="dropdown-item" { "Upload Image" }}
                                 }
                             }
@@ -164,41 +188,33 @@ async fn wine_information(
     let events = crate::db::wine_inventory_events(&state.db, wine_id)
         .await
         .expect("Get events");
-    let wine_grapes = crate::db::get_wine_grapes(&state.db, wine_id)
-        .await
-        .expect("Get wine grapes");
-    let all_grapes = crate::db::get_grapes(&state.db).await.expect("Get grapes");
     maud::html! {
         h1 {(wine.name)}
         a href="/" { "Back" }
-        h3 { "Events" }
-        table class="table table-striped" {
-          thead {
-              tr {
-                  th { "Date" }
-                  th { "Bottles" }
-              }
-          }
-          tbody {
-            @for evt in events {
-                tr {
-                    td {(evt.dt)}
-                    td {(evt.bottles)}
+        div class="row align-items-start" {
+            div class="col" {
+                h3 { "Events" }
+                table class="table table-striped" {
+                  thead {
+                      tr {
+                          th { "Date" }
+                          th { "Bottles" }
+                      }
+                  }
+                  tbody {
+                    @for evt in events {
+                        tr {
+                            td {(evt.dt)}
+                            td {(evt.bottles)}
+                        }
+                    }
+                  }
                 }
+                h3 { "Grapes" }
             }
-          }
-        }
-        h3 { "Grapes" }
-        form hx-post=(format!("/wines/{}/grapes", wine_id)) hx-swap="none" {
-            input type="submit" value="Set Grapes" class="btn btn-primary" {}
-            @for grape in all_grapes {
-                div class="form-check" {
-                    // @if wine_grapes.contains(&grape) {
-                        input class="form-check-input" name="grapes" type="checkbox" value=(grape) id=(grape) checked[(wine_grapes.contains(&grape))]
-                    // } @else {
-                        // input class="form-check-input" name="grapes" type="checkbox" value=(grape) id=(grape);
-                    // }
-                    label class="form-check-label" for=(grape) { (grape) }
+            div class="col" {
+                @if let Some(image) = &wine.image_b64 {
+                    img src=(format!("data:image/png;base64, {image}"));
                 }
             }
         }
@@ -249,11 +265,37 @@ async fn add_wine_post(
     wine_table(axum::extract::State(state)).await
 }
 
-async fn wine_grapes(
+async fn edit_wine_grapes(
+    axum::extract::State(state): axum::extract::State<State>,
+    axum::extract::Path(wine_id): axum::extract::Path<i64>,
+) -> Markup {
+    let state = state.lock().await;
+    let wine_grapes = crate::db::get_wine_grapes(&state.db, wine_id)
+        .await
+        .expect("Get wine grapes");
+    let all_grapes = crate::db::get_grapes(&state.db).await.expect("Get grapes");
+    maud::html! {
+        form hx-post=(format!("/wines/{}/grapes", wine_id)) hx-swap="none" {
+            input type="submit" value="Set Grapes" class="btn btn-primary" {}
+            @for grape in all_grapes {
+                div class="form-check" {
+                    // @if wine_grapes.contains(&grape) {
+                    input class="form-check-input" name="grapes" type="checkbox" value=(grape) id=(grape) checked[(wine_grapes.contains(&grape))]
+                        // } @else {
+                        // input class="form-check-input" name="grapes" type="checkbox" value=(grape) id=(grape);
+                        // }
+                        label class="form-check-label" for=(grape) { (grape) }
+                }
+            }
+        }
+    }
+}
+
+async fn post_wine_grapes(
     axum::extract::State(state): axum::extract::State<State>,
     axum::extract::Path(wine_id): axum::extract::Path<i64>,
     axum::extract::RawForm(form): axum::extract::RawForm,
-) {
+) -> (impl IntoResponseParts, &'static str) {
     // form is b"grapes=Barbera&grapes=Gamay"
     let data = percent_encoding::percent_decode(&form)
         .decode_utf8()
@@ -272,10 +314,11 @@ async fn wine_grapes(
     crate::db::set_wine_grapes(&state.db, wine_id, &grapes)
         .await
         .expect("Can set grapes");
+    (axum_htmx::HxRedirect("/".to_owned()), "")
 }
 
 async fn wine_image(
-    axum::extract::State(_state): axum::extract::State<State>,
+    // axum::extract::State(_state): axum::extract::State<State>,
     axum::extract::Path(wine_id): axum::extract::Path<i64>,
 ) -> Markup {
     maud::html! {
@@ -313,7 +356,7 @@ async fn post_wine_image(
     axum::extract::State(state): axum::extract::State<State>,
     axum::extract::Path(wine_id): axum::extract::Path<i64>,
     mut mp: axum::extract::Multipart,
-) {
+) -> (impl IntoResponseParts, &'static str) {
     tracing::info!("new image");
 
     while let Some(field) = mp.next_field().await.expect("Get next multipart field") {
@@ -329,4 +372,5 @@ async fn post_wine_image(
                 .expect("Update image in db");
         }
     }
+    (axum_htmx::HxRedirect("/".to_owned()), "")
 }
