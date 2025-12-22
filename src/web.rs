@@ -13,14 +13,22 @@ type State = std::sync::Arc<tokio::sync::Mutex<StateInner>>;
 pub async fn run(db: sqlx::SqlitePool) -> anyhow::Result<()> {
     let state = std::sync::Arc::new(tokio::sync::Mutex::new(StateInner { db }));
     let router = axum::Router::new()
-        .route("/add-wine", axum::routing::get(add_wine_form))
+        .route("/add-wine", axum::routing::get(md_add_wine))
         .route("/add-wine", axum::routing::post(add_wine_post))
         .route("/", axum::routing::get(index))
-        .route("/wines/{wine_id}/image", axum::routing::get(wine_image))
+        .route(
+            "/wines/{wine_id}/image",
+            axum::routing::get(md_upload_wine_image),
+        )
         .route(
             "/wines/{wine_id}/image",
             axum::routing::post(post_wine_image),
         )
+        .route(
+            "/wines/{wine_id}/comment",
+            axum::routing::get(md_add_comment),
+        )
+        .route("/wines/{wine_id}/comment", axum::routing::post(add_comment))
         .route(
             "/wines/{wine_id}/grapes",
             axum::routing::get(edit_wine_grapes),
@@ -163,6 +171,7 @@ async fn wine_table(axum::extract::State(state): axum::extract::State<State>) ->
                                 ul class="dropdown-menu" {
                                     li { a class="dropdown-item" { "Drink" } }
                                     li { a class="dropdown-item" { "Buy" } }
+                                    li { a class="dropdown-item" hx-target="#main" hx-get=(format!("/wines/{}/comment", w.id))  { "Comment" } }
                                     li { a class="dropdown-item" hx-target="#main" hx-get=(format!("/wines/{}/grapes", w.id))  { "Grapes" } }
                                     li { a hx-trigger="click" hx-target="#main" hx-get=(format!("/wines/{}/image", w.id)) class="dropdown-item" { "Upload Image" }}
                                 }
@@ -188,6 +197,9 @@ async fn wine_information(
     let events = crate::db::wine_inventory_events(&state.db, wine_id)
         .await
         .expect("Get events");
+    let comments = crate::db::wine_comments(&state.db, wine_id)
+        .await
+        .expect("Get wine comments");
     maud::html! {
         h1 {(wine.name)}
         a href="/" { "Back" }
@@ -210,7 +222,11 @@ async fn wine_information(
                     }
                   }
                 }
-                h3 { "Grapes" }
+                h3 { "Comments" }
+                @for comment in comments {
+                    h4 { (comment.dt.date()) }
+                    p { (comment.comment) }
+                }
             }
             div class="col" {
                 @if let Some(image) = &wine.image_b64 {
@@ -221,7 +237,7 @@ async fn wine_information(
     }
 }
 
-async fn add_wine_form(axum::extract::State(_state): axum::extract::State<State>) -> maud::Markup {
+async fn md_add_wine(axum::extract::State(_state): axum::extract::State<State>) -> maud::Markup {
     tracing::info!("Adding wine");
     maud::html! {
         h1 { "Add wine" }
@@ -317,10 +333,41 @@ async fn post_wine_grapes(
     (axum_htmx::HxRedirect("/".to_owned()), "")
 }
 
-async fn wine_image(
-    // axum::extract::State(_state): axum::extract::State<State>,
+async fn md_add_comment(axum::extract::Path(wine_id): axum::extract::Path<i64>) -> Markup {
+    maud::html! {
+        form id="add-comment" hx-post=(format!("/wines/{wine_id}/comment")) hx-target="#main" {
+            div class="mb-3" {
+                label for="comment" class="form-label" { "Comment" }
+                input name="comment" id="comment" class="form-control" {}
+            }
+            div class="mb-3" {
+                input type="submit" value="Add" class="btn btn-primary" {}
+                button hx-trigger="click" hx-target="#main" hx-swap="innerHTML" hx-get="/" class="btn btn-primary" {
+                    "Cancel"
+                }
+            }
+        }
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct AddComment {
+    comment: String,
+}
+async fn add_comment(
+    axum::extract::State(state): axum::extract::State<State>,
     axum::extract::Path(wine_id): axum::extract::Path<i64>,
-) -> Markup {
+    axum::extract::Form(comment): axum::extract::Form<AddComment>,
+) -> (impl IntoResponseParts, &'static str) {
+    let state = state.lock().await;
+    let now = chrono::Local::now().naive_local();
+    db::add_wine_comment(&state.db, wine_id, &comment.comment, now)
+        .await
+        .expect("Add comment");
+    (axum_htmx::HxRedirect("/".to_owned()), "")
+}
+
+async fn md_upload_wine_image(axum::extract::Path(wine_id): axum::extract::Path<i64>) -> Markup {
     maud::html! {
         h1 { "Upload image" }
         form hx-encoding="multipart/form-data" hx-post=(format!("/wines/{wine_id}/image")) {
@@ -345,8 +392,8 @@ fn convert_and_thumbnail(image_data: &[u8]) -> anyhow::Result<(String, String)> 
     let mut cursor = std::io::Cursor::new(&mut thumbnail_encoded);
     thumbnail.write_to(&mut cursor, image::ImageFormat::Png)?;
 
-    let img_64 = base64::prelude::BASE64_STANDARD.encode(&image_encoded);
-    let tn_u64 = base64::prelude::BASE64_STANDARD.encode(&thumbnail_encoded);
+    let img_64 = base64::prelude::BASE64_STANDARD_NO_PAD.encode(&image_encoded);
+    let tn_u64 = base64::prelude::BASE64_STANDARD_NO_PAD.encode(&thumbnail_encoded);
 
     Ok((img_64, tn_u64))
 }

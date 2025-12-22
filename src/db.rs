@@ -114,3 +114,40 @@ pub(crate) async fn set_wine_image(
     .await?;
     Ok(())
 }
+
+#[derive(sqlx::FromRow)]
+pub(crate) struct WineComment {
+    pub comment: String,
+    pub dt: chrono::NaiveDateTime,
+}
+
+pub(crate) async fn wine_comments(
+    db: &sqlx::SqlitePool,
+    wine_id: i64,
+) -> anyhow::Result<Vec<WineComment>> {
+    let res = sqlx::query_as!(
+        WineComment,
+        "SELECT comment,dt FROM wine_comments WHERE wine_id=$1 ORDER by dt DESC",
+        wine_id
+    )
+    .fetch_all(db)
+    .await?;
+    Ok(res)
+}
+
+pub(crate) async fn add_wine_comment(
+    db: &sqlx::SqlitePool,
+    wine_id: i64,
+    comment: &str,
+    dt: chrono::NaiveDateTime,
+) -> anyhow::Result<()> {
+    sqlx::query!(
+        "INSERT INTO wine_comments (wine_id, comment, dt) VALUES ($1, $2, $3)",
+        wine_id,
+        comment,
+        dt
+    )
+    .execute(db)
+    .await?;
+    Ok(())
+}
