@@ -1,3 +1,7 @@
+use std::str::FromStr;
+
+use anyhow::Context;
+
 #[derive(sqlx::FromRow, Debug)]
 pub(crate) struct Wine {
     pub id: i64,
@@ -14,7 +18,13 @@ pub(crate) struct WineInvEvent {
 }
 
 pub(crate) async fn connect() -> anyhow::Result<sqlx::SqlitePool> {
-    let db = sqlx::SqlitePool::connect(&std::env::var("DATABASE_URL")?).await?;
+    let cfg = sqlx::sqlite::SqliteConnectOptions::from_str(
+        &std::env::var("DATABASE_URL").context("DATABASE_URL not set")?,
+    )?
+    .auto_vacuum(sqlx::sqlite::SqliteAutoVacuum::Full)
+    .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
+    .create_if_missing(true);
+    let db = sqlx::SqlitePool::connect_with(cfg).await?;
     Ok(db)
 }
 
