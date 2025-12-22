@@ -2,7 +2,8 @@ CREATE TABLE wines (
   id INTEGER PRIMARY KEY AUTOINCREMENT,
   name TEXT NOT NULL,
   year INT NOT NULL,
-  image BLOB
+  image_b64 TEXT,
+  image_thumbnail_b64 TEXT
 );
 
 CREATE TABLE wine_grapes (

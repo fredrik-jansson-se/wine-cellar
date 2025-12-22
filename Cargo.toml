@@ -5,10 +5,12 @@ edition = "2024"
 
 [dependencies]
 anyhow = "1.0.100"
-axum = { version = "0.8.8", features = ["form"] }
+axum = { version = "0.8.8", features = ["form", "multipart"] }
 axum-htmx = "0.8.1"
+base64 = "0.22.1"
 chrono = { version = "0.4.42", features = ["serde"] }
 dotenv = "0.15.0"
+image = "0.25.9"
 maud = { version = "0.27.0", features = ["axum"] }
 percent-encoding = "2.3.2"
 serde = { version = "1.0.228", features = ["derive"] }

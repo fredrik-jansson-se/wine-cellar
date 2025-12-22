@@ -3,12 +3,12 @@ pub(crate) struct Wine {
     pub id: i64,
     pub name: String,
     pub year: i64,
-    pub image: Option<Vec<u8>>,
+    pub image_b64: Option<String>,
+    pub image_thumbnail_b64: Option<String>,
 }
 
 #[derive(sqlx::FromRow, Debug)]
 pub(crate) struct WineInvEvent {
-    pub wine_id: i64,
     pub dt: chrono::NaiveDateTime,
     pub bottles: i64,
 }
@@ -31,7 +31,7 @@ pub(crate) async fn wine_inventory_events(
 ) -> anyhow::Result<Vec<WineInvEvent>> {
     let res = sqlx::query_as!(
         WineInvEvent,
-        "SELECT * from wine_inventory_events WHERE wine_id=$1",
+        "SELECT dt,bottles from wine_inventory_events WHERE wine_id=$1",
         wine_id
     )
     .fetch_all(db)
@@ -95,4 +95,22 @@ pub(crate) async fn get_grapes(db: &sqlx::SqlitePool) -> anyhow::Result<Vec<Stri
         .fetch_all(db)
         .await?;
     Ok(res)
+}
+
+// Assumes b64 encoded image and thumbnail
+pub(crate) async fn set_wine_image(
+    db: &sqlx::SqlitePool,
+    wine_id: i64,
+    image: &str,
+    thumbnail: &str,
+) -> anyhow::Result<()> {
+    sqlx::query!(
+        "UPDATE wines SET image_b64=$2, image_thumbnail_b64=$3 WHERE id=$1",
+        wine_id,
+        image,
+        thumbnail
+    )
+    .execute(db)
+    .await?;
+    Ok(())
 }

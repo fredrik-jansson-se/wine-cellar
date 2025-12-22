@@ -1,4 +1,7 @@
+use base64::Engine;
 use maud::Markup;
+
+use crate::db;
 
 struct StateInner {
     db: sqlx::SqlitePool,
@@ -12,6 +15,11 @@ pub async fn run(db: sqlx::SqlitePool) -> anyhow::Result<()> {
         .route("/add-wine", axum::routing::get(add_wine_form))
         .route("/add-wine", axum::routing::post(add_wine_post))
         .route("/", axum::routing::get(index))
+        .route("/wines/{wine_id}/image", axum::routing::get(wine_image))
+        .route(
+            "/wines/{wine_id}/image",
+            axum::routing::post(post_wine_image),
+        )
         .route("/wines/{wine_id}/grapes", axum::routing::post(wine_grapes))
         .route("/wines/{wine_id}", axum::routing::get(wine_information))
         .route("/wines", axum::routing::get(wine_table))
@@ -24,47 +32,47 @@ pub async fn run(db: sqlx::SqlitePool) -> anyhow::Result<()> {
 }
 
 async fn index() -> Markup {
-  use maud::DOCTYPE;
-  maud::html! {
-    (DOCTYPE)
-    meta name="viewport" content="width=device-width, initial-scale=1";
-    meta charset="utf-8";
-    link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css"
-        rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB"
-        crossorigin="anonymous";
-    script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js" {}
+    use maud::DOCTYPE;
+    maud::html! {
+     (DOCTYPE)
+     meta name="viewport" content="width=device-width, initial-scale=1";
+     meta charset="utf-8";
+     link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css"
+         rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB"
+         crossorigin="anonymous";
+     script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js" {}
 
-    body {
-      div id="main" {
-        div hx-get="/wines" hx-trigger="load" hx-target="#main" {}
-      }
-      script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
-        integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI"
-        crossorigin="anonymous" {}
-     }
-   }
-}
-
-fn drink_modal(_wine_id: i64) -> Markup {
-  maud::html! {
-    div class="modal fade" id="exampleModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true" {
-      div class="modal-dialog" {
-        div class="modal-content" {
-          div class="modal-header" {
-            h1 class="modal-title fs-5" id="exampleModalLabel" { "Modal title" }
-            button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" {}
-          }
-          div class="modal-body" {
-          }
-          div class="modal-footer" {
-            button type="button" class="btn btn-secondary" data-bs-dismiss="modal" { "Close" }
-            button type="button" class="btn btn-primary" {"Save changes"}
-          }
-        }
+     body {
+       div id="main" class="container" {
+         div hx-get="/wines" hx-trigger="load" hx-target="#main" {}
+       }
+       script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
+         integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI"
+         crossorigin="anonymous" {}
       }
     }
-  }
 }
+
+// fn drink_modal(_wine_id: i64) -> Markup {
+//     maud::html! {
+//       div class="modal fade" id="exampleModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true" {
+//         div class="modal-dialog" {
+//           div class="modal-content" {
+//             div class="modal-header" {
+//               h1 class="modal-title fs-5" id="exampleModalLabel" { "Modal title" }
+//               button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" {}
+//             }
+//             div class="modal-body" {
+//             }
+//             div class="modal-footer" {
+//               button type="button" class="btn btn-secondary" data-bs-dismiss="modal" { "Close" }
+//               button type="button" class="btn btn-primary" {"Save changes"}
+//             }
+//           }
+//         }
+//       }
+//     }
+// }
 
 async fn wine_table(axum::extract::State(state): axum::extract::State<State>) -> Markup {
     tracing::info!("wine_table");
@@ -73,10 +81,11 @@ async fn wine_table(axum::extract::State(state): axum::extract::State<State>) ->
 
     let mut disp_wines = Vec::with_capacity(wines.len());
     struct MainWine {
-        pub id: i64,
-        pub name: String,
-        pub year: i64,
-        pub num_bottles: i64,
+        id: i64,
+        name: String,
+        year: i64,
+        num_bottles: i64,
+        thumbnail: Option<String>,
     }
 
     for wine in wines {
@@ -89,6 +98,7 @@ async fn wine_table(axum::extract::State(state): axum::extract::State<State>) ->
             name: wine.name,
             year: wine.year,
             num_bottles: inventory,
+            thumbnail: wine.image_thumbnail_b64,
         });
     }
 
@@ -98,6 +108,7 @@ async fn wine_table(axum::extract::State(state): axum::extract::State<State>) ->
         table class="table table-striped" {
             thead {
                 tr {
+                    th {}
                     th { "Name" }
                     th { "Year" }
                     th { "Bottles" }
@@ -107,6 +118,12 @@ async fn wine_table(axum::extract::State(state): axum::extract::State<State>) ->
             tbody {
                 @for w in disp_wines {
                     tr {
+                        td {
+                            @if let Some(tn) = &w.thumbnail {
+                                img src=(format!("data:image/png;base64, {tn}"));
+
+                            }
+                        }
                         td {
                             a href="#"
                               class="link-primary"
@@ -123,6 +140,7 @@ async fn wine_table(axum::extract::State(state): axum::extract::State<State>) ->
                                 ul class="dropdown-menu" {
                                     li { a class="dropdown-item" { "Drink" } }
                                     li { a class="dropdown-item" { "Buy" } }
+                                    li { a hx-trigger="click" hx-target="#main" hx-get=(format!("/wines/{}/image", w.id)) class="dropdown-item" { "Upload Image" }}
                                 }
                             }
                         }
@@ -237,7 +255,9 @@ async fn wine_grapes(
     axum::extract::RawForm(form): axum::extract::RawForm,
 ) {
     // form is b"grapes=Barbera&grapes=Gamay"
-  let data = percent_encoding::percent_decode(&form).decode_utf8().expect("Valid utf-8");
+    let data = percent_encoding::percent_decode(&form)
+        .decode_utf8()
+        .expect("Valid utf-8");
 
     tracing::info!("Data: {data}");
     let mut grapes = Vec::new();
@@ -252,4 +272,61 @@ async fn wine_grapes(
     crate::db::set_wine_grapes(&state.db, wine_id, &grapes)
         .await
         .expect("Can set grapes");
+}
+
+async fn wine_image(
+    axum::extract::State(_state): axum::extract::State<State>,
+    axum::extract::Path(wine_id): axum::extract::Path<i64>,
+) -> Markup {
+    maud::html! {
+        h1 { "Upload image" }
+        form hx-encoding="multipart/form-data" hx-post=(format!("/wines/{wine_id}/image")) {
+           input type="file" name="image";
+           input type="submit" value="Upload" class="btn btn-primary" {}
+        }
+    }
+}
+
+fn convert_and_thumbnail(image_data: &[u8]) -> anyhow::Result<(String, String)> {
+    let reader = image::ImageReader::new(std::io::Cursor::new(image_data)).with_guessed_format()?;
+
+    let image = reader.decode()?;
+    let thumbnail = image.resize(160, 160, image::imageops::Gaussian);
+    let image = image.resize(512, 512, image::imageops::Gaussian);
+
+    let mut image_encoded = Vec::new();
+    let mut cursor = std::io::Cursor::new(&mut image_encoded);
+    image.write_to(&mut cursor, image::ImageFormat::Png)?;
+
+    let mut thumbnail_encoded = Vec::new();
+    let mut cursor = std::io::Cursor::new(&mut thumbnail_encoded);
+    thumbnail.write_to(&mut cursor, image::ImageFormat::Png)?;
+
+    let img_64 = base64::prelude::BASE64_STANDARD.encode(&image_encoded);
+    let tn_u64 = base64::prelude::BASE64_STANDARD.encode(&thumbnail_encoded);
+
+    Ok((img_64, tn_u64))
+}
+
+#[tracing::instrument(skip(state))]
+async fn post_wine_image(
+    axum::extract::State(state): axum::extract::State<State>,
+    axum::extract::Path(wine_id): axum::extract::Path<i64>,
+    mut mp: axum::extract::Multipart,
+) {
+    tracing::info!("new image");
+
+    while let Some(field) = mp.next_field().await.expect("Get next multipart field") {
+        tracing::info!("Name: {:?}", field.name());
+        if let Some("image") = field.name() {
+            let image_data = field.bytes().await.expect("Get image data");
+
+            tracing::info!("Got image with size: {}", image_data.len());
+            let (image, thumbnail) = convert_and_thumbnail(&image_data).expect("Convert image");
+            let state = state.lock().await;
+            db::set_wine_image(&state.db, wine_id, &image, &thumbnail)
+                .await
+                .expect("Update image in db");
+        }
+    }
 }
