@@ -24,24 +24,25 @@ pub async fn run(db: sqlx::SqlitePool) -> anyhow::Result<()> {
 }
 
 async fn index() -> Markup {
-    use maud::DOCTYPE;
+  use maud::DOCTYPE;
+  maud::html! {
+    (DOCTYPE)
+    meta name="viewport" content="width=device-width, initial-scale=1";
+    meta charset="utf-8";
+    link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css"
+        rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB"
+        crossorigin="anonymous";
+    script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js" {}
 
-    maud::html! {
-        meta name="viewport" content="width=device-width, initial-scale=1";
-        link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/css/bootstrap.min.css"
-            rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB"
-            crossorigin="anonymous";
-        script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js" {}
-
-        body {
-          div id="main" {
-            div hx-get="/wines" hx-trigger="load" hx-target="#main" {}
-          }
-          script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
-                integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI"
-                crossorigin="anonymous" {}
-        }
-    }
+    body {
+      div id="main" {
+        div hx-get="/wines" hx-trigger="load" hx-target="#main" {}
+      }
+      script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
+        integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI"
+        crossorigin="anonymous" {}
+     }
+   }
 }
 
 fn drink_modal(_wine_id: i64) -> Markup {
@@ -174,11 +175,11 @@ async fn wine_information(
             input type="submit" value="Set Grapes" class="btn btn-primary" {}
             @for grape in all_grapes {
                 div class="form-check" {
-                    @if wine_grapes.contains(&grape) {
-                        input class="form-check-input" name="grapes" type="checkbox" value=(grape) id=(grape) checked;
-                    } @else {
-                        input class="form-check-input" name="grapes" type="checkbox" value=(grape) id=(grape);
-                    }
+                    // @if wine_grapes.contains(&grape) {
+                        input class="form-check-input" name="grapes" type="checkbox" value=(grape) id=(grape) checked[(wine_grapes.contains(&grape))]
+                    // } @else {
+                        // input class="form-check-input" name="grapes" type="checkbox" value=(grape) id=(grape);
+                    // }
                     label class="form-check-label" for=(grape) { (grape) }
                 }
             }
@@ -236,8 +237,9 @@ async fn wine_grapes(
     axum::extract::RawForm(form): axum::extract::RawForm,
 ) {
     // form is b"grapes=Barbera&grapes=Gamay"
+  let data = percent_encoding::percent_decode(&form).decode_utf8().expect("Valid utf-8");
 
-    let data = String::from_utf8(form.to_vec()).expect("Convert form to string");
+    tracing::info!("Data: {data}");
     let mut grapes = Vec::new();
     for grape in data.split("&") {
         let item = grape.split("=").nth(1);

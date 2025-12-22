@@ -2146,6 +2146,7 @@ dependencies = [
  "chrono",
  "dotenv",
  "maud",
+ "percent-encoding",
  "serde",
  "serde_json",
  "sqlx",
