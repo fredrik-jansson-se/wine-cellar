@@ -38,6 +38,7 @@ pub async fn run(db: sqlx::SqlitePool) -> anyhow::Result<()> {
             axum::routing::post(post_wine_grapes),
         )
         .route("/wines/{wine_id}", axum::routing::get(wine_information))
+        .route("/wines/{wine_id}", axum::routing::delete(delete_wine))
         .route("/wines", axum::routing::get(wine_table))
         .with_state(state);
 
@@ -68,27 +69,6 @@ async fn index() -> Markup {
       }
     }
 }
-
-// fn drink_modal(_wine_id: i64) -> Markup {
-//     maud::html! {
-//       div class="modal fade" id="exampleModal" tabindex="-1" aria-labelledby="exampleModalLabel" aria-hidden="true" {
-//         div class="modal-dialog" {
-//           div class="modal-content" {
-//             div class="modal-header" {
-//               h1 class="modal-title fs-5" id="exampleModalLabel" { "Modal title" }
-//               button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" {}
-//             }
-//             div class="modal-body" {
-//             }
-//             div class="modal-footer" {
-//               button type="button" class="btn btn-secondary" data-bs-dismiss="modal" { "Close" }
-//               button type="button" class="btn btn-primary" {"Save changes"}
-//             }
-//           }
-//         }
-//       }
-//     }
-// }
 
 async fn wine_table(axum::extract::State(state): axum::extract::State<State>) -> Markup {
     tracing::info!("wine_table");
@@ -174,6 +154,10 @@ async fn wine_table(axum::extract::State(state): axum::extract::State<State>) ->
                                     li { a class="dropdown-item" hx-target="#main" hx-get=(format!("/wines/{}/comment", w.id))  { "Comment" } }
                                     li { a class="dropdown-item" hx-target="#main" hx-get=(format!("/wines/{}/grapes", w.id))  { "Grapes" } }
                                     li { a hx-trigger="click" hx-target="#main" hx-get=(format!("/wines/{}/image", w.id)) class="dropdown-item" { "Upload Image" }}
+                                    li { a hx-target="#main" 
+                                           hx-delete=(format!("/wines/{}", w.id)) 
+                                           hx-confirm="Are you sure you wish to delete this wine?"
+                                           class="dropdown-item" { "Delete" }}
                                 }
                             }
                         }
@@ -279,6 +263,18 @@ async fn add_wine_post(
             .expect("Add wine");
     }
     wine_table(axum::extract::State(state)).await
+}
+
+async fn delete_wine(
+    axum::extract::State(state): axum::extract::State<State>,
+    axum::extract::Path(wine_id): axum::extract::Path<i64>,
+) -> (impl IntoResponseParts, &'static str) {
+    let state = state.lock().await;
+
+    db::delete_wine(&state.db, wine_id)
+        .await
+        .expect("Delete wine");
+    (axum_htmx::HxRedirect("/".to_owned()), "")
 }
 
 async fn edit_wine_grapes(

@@ -47,6 +47,27 @@ pub(crate) async fn add_wine(db: &sqlx::SqlitePool, name: &str, year: i64) -> an
     Ok(())
 }
 
+pub(crate) async fn delete_wine(db: &sqlx::SqlitePool, wine_id: i64) -> anyhow::Result<()> {
+    let mut trans = db.begin().await?;
+    sqlx::query!("DELETE FROM wine_comments WHERE wine_id=$1", wine_id)
+        .execute(&mut *trans)
+        .await?;
+    sqlx::query!("DELETE FROM wine_grapes WHERE wine_id=$1", wine_id)
+        .execute(&mut *trans)
+        .await?;
+    sqlx::query!(
+        "DELETE FROM wine_inventory_events WHERE wine_id=$1",
+        wine_id
+    )
+    .execute(&mut *trans)
+    .await?;
+    sqlx::query!("DELETE FROM wines WHERE id=$1", wine_id)
+        .execute(&mut *trans)
+        .await?;
+    trans.commit().await?;
+    Ok(())
+}
+
 pub(crate) async fn get_wine(db: &sqlx::SqlitePool, id: i64) -> anyhow::Result<Wine> {
     let res = sqlx::query_as!(Wine, "SELECT * from wines WHERE id=$1", id)
         .fetch_one(db)
