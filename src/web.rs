@@ -22,7 +22,9 @@ pub async fn run(db: sqlx::SqlitePool) -> anyhow::Result<()> {
         )
         .route(
             "/wines/{wine_id}/image",
-            axum::routing::post(post_wine_image),
+            axum::routing::post(post_wine_image)
+                // Disable body limit on file
+                .layer(axum::extract::DefaultBodyLimit::disable()),
         )
         .route(
             "/wines/{wine_id}/comment",
@@ -42,7 +44,8 @@ pub async fn run(db: sqlx::SqlitePool) -> anyhow::Result<()> {
         .route("/wines", axum::routing::get(wine_table))
         .with_state(state);
 
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:20000").await?;
+    let lap = std::env::var("WINE_LAP").unwrap_or("0.0.0.0:20000".to_owned());
+    let listener = tokio::net::TcpListener::bind(lap).await?;
     tracing::info!("Starting web server");
     axum::serve(listener, router.into_make_service()).await?;
     Ok(())
@@ -154,8 +157,8 @@ async fn wine_table(axum::extract::State(state): axum::extract::State<State>) ->
                                     li { a class="dropdown-item" hx-target="#main" hx-get=(format!("/wines/{}/comment", w.id))  { "Comment" } }
                                     li { a class="dropdown-item" hx-target="#main" hx-get=(format!("/wines/{}/grapes", w.id))  { "Grapes" } }
                                     li { a hx-trigger="click" hx-target="#main" hx-get=(format!("/wines/{}/image", w.id)) class="dropdown-item" { "Upload Image" }}
-                                    li { a hx-target="#main" 
-                                           hx-delete=(format!("/wines/{}", w.id)) 
+                                    li { a hx-target="#main"
+                                           hx-delete=(format!("/wines/{}", w.id))
                                            hx-confirm="Are you sure you wish to delete this wine?"
                                            class="dropdown-item" { "Delete" }}
                                 }
@@ -377,7 +380,7 @@ fn convert_and_thumbnail(image_data: &[u8]) -> anyhow::Result<(String, String)> 
     let reader = image::ImageReader::new(std::io::Cursor::new(image_data)).with_guessed_format()?;
 
     let image = reader.decode()?;
-    let thumbnail = image.resize(160, 160, image::imageops::Gaussian);
+    let thumbnail = image.thumbnail(160, 160);
     let image = image.resize(512, 512, image::imageops::Gaussian);
 
     let mut image_encoded = Vec::new();
@@ -403,7 +406,6 @@ async fn post_wine_image(
     tracing::info!("new image");
 
     while let Some(field) = mp.next_field().await.expect("Get next multipart field") {
-        tracing::info!("Name: {:?}", field.name());
         if let Some("image") = field.name() {
             let image_data = field.bytes().await.expect("Get image data");
 
