@@ -36,18 +36,17 @@ pub(crate) struct AddWine {
     year: i64,
 }
 
-pub(crate) async fn add_wine_post(
+#[tracing::instrument(skip(state))]
+pub(crate) async fn add_wine(
     axum::extract::State(state): axum::extract::State<State>,
     axum::Form(wine): axum::Form<AddWine>,
-) -> (impl IntoResponseParts, &'static str) {
-    tracing::info!("Adding wine: {wine:?}");
+) -> MDResult {
+    tracing::info!("add_wine");
     {
         let state = state.lock().await;
-        db::add_wine(&state.db, &wine.name, wine.year)
-            .await
-            .expect("Add wine");
+        db::add_wine(&state.db, &wine.name, wine.year).await?;
     }
-    (axum_htmx::HxRedirect("/".to_owned()), "")
+    Ok(super::markup::wine_table(axum::extract::State(state)).await)
 }
 
 pub(crate) async fn delete_wine(
@@ -97,13 +96,13 @@ pub(crate) async fn add_comment(
     axum::extract::State(state): axum::extract::State<State>,
     axum::extract::Path(wine_id): axum::extract::Path<i64>,
     axum::extract::Form(comment): axum::extract::Form<AddComment>,
-) -> (impl IntoResponseParts, &'static str) {
-    let state = state.lock().await;
-    let now = chrono::Local::now().naive_local();
-    db::add_wine_comment(&state.db, wine_id, &comment.comment, now)
-        .await
-        .expect("Add comment");
-    (axum_htmx::HxRedirect("/".to_owned()), "")
+) -> MDResult {
+    {
+        let state = state.lock().await;
+        let now = chrono::Local::now().naive_local();
+        db::add_wine_comment(&state.db, wine_id, &comment.comment, now).await?;
+    }
+    Ok(super::markup::wine_table(axum::extract::State(state)).await)
 }
 
 #[derive(serde::Deserialize, Debug)]

@@ -234,7 +234,7 @@ pub(crate) async fn add_wine(axum::extract::State(_state): axum::extract::State<
             }
             div class="mb-3" {
                 input type="submit" value="Add" class="btn btn-primary" {}
-                button hx-trigger="click" hx-target="#main" hx-swap="innerHTML" hx-get="/" class="btn btn-primary" {
+                button hx-trigger="click" hx-target="#main" hx-get="/" class="btn btn-primary" {
                     "Cancel"
                 }
             }
@@ -252,7 +252,7 @@ pub(crate) async fn add_comment(axum::extract::Path(wine_id): axum::extract::Pat
             }
             div class="mb-3" {
                 input type="submit" value="Add" class="btn btn-primary" {}
-                button hx-trigger="click" hx-target="#main" hx-swap="innerHTML" hx-get="/" class="btn btn-primary" {
+                button hx-trigger="click" hx-target="#main" hx-get="/" class="btn btn-primary" {
                     "Cancel"
                 }
             }

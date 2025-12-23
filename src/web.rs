@@ -11,7 +11,7 @@ pub async fn run(db: sqlx::SqlitePool) -> anyhow::Result<()> {
     let state = std::sync::Arc::new(tokio::sync::Mutex::new(StateInner { db }));
     let router = axum::Router::new()
         .route("/add-wine", axum::routing::get(markup::add_wine))
-        .route("/add-wine", axum::routing::post(handlers::add_wine_post))
+        .route("/add-wine", axum::routing::post(handlers::add_wine))
         .route("/", axum::routing::get(markup::index))
         .route(
             "/wines/{wine_id}/image",

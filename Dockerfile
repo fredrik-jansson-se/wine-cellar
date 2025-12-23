@@ -73,7 +73,6 @@ COPY --from=builder /app-dir/target/release/$APP /bin/$APP
 WORKDIR /tmp
 
 WORKDIR /app-dir
-COPY .env .
 EXPOSE 20000
 
 ENV RUST_LOG=info
