@@ -20,10 +20,13 @@ pub(crate) struct WineInvEvent {
 pub(crate) async fn connect() -> anyhow::Result<sqlx::SqlitePool> {
     let cfg = sqlx::sqlite::SqliteConnectOptions::from_str(
         &std::env::var("DATABASE_URL").context("DATABASE_URL not set")?,
-    )?
+    )
+    .context("Open database file")?
     .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
     .create_if_missing(true);
-    let db = sqlx::SqlitePool::connect_with(cfg).await?;
+    let db = sqlx::SqlitePool::connect_with(cfg)
+        .await
+        .context("Open database")?;
     Ok(db)
 }
 
@@ -161,6 +164,20 @@ pub(crate) async fn wine_comments(
         wine_id
     )
     .fetch_all(db)
+    .await?;
+    Ok(res)
+}
+
+pub(crate) async fn last_wine_comment(
+    db: &sqlx::SqlitePool,
+    wine_id: i64,
+) -> anyhow::Result<Option<WineComment>> {
+    let res = sqlx::query_as!(
+        WineComment,
+        "SELECT comment,dt FROM wine_comments WHERE wine_id=$1 ORDER by dt DESC LIMIT 1",
+        wine_id
+    )
+    .fetch_optional(db)
     .await?;
     Ok(res)
 }

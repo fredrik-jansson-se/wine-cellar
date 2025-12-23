@@ -3,7 +3,7 @@ mod web;
 
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
-    dotenv::dotenv()?;
+    let _ = dotenv::dotenv();
     tracing_subscriber::fmt::init();
     let db_pool = db::connect().await?;
 
@@ -16,5 +16,6 @@ async fn main() -> anyhow::Result<()> {
     });
 
     tokio::signal::ctrl_c().await?;
+    tracing::info!("Shutting down");
     Ok(())
 }

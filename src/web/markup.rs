@@ -35,6 +35,7 @@ pub(crate) async fn wine_table(axum::extract::State(state): axum::extract::State
         name: String,
         year: i64,
         num_bottles: i64,
+        last_comment: Option<String>,
         thumbnail: Option<String>,
         grapes: Vec<String>,
     }
@@ -47,11 +48,15 @@ pub(crate) async fn wine_table(axum::extract::State(state): axum::extract::State
         let wine_grapes = db::get_wine_grapes(&state.db, wine.id)
             .await
             .expect("Get wine grapes");
+        let last_comment = db::last_wine_comment(&state.db, wine.id)
+            .await
+            .expect("Last comment");
         disp_wines.push(MainWine {
             id: wine.id,
             name: wine.name,
             year: wine.year,
             num_bottles: inventory,
+            last_comment: last_comment.map(|c| c.comment),
             thumbnail: wine.image_thumbnail_b64,
             grapes: wine_grapes,
         });
@@ -67,6 +72,7 @@ pub(crate) async fn wine_table(axum::extract::State(state): axum::extract::State
                     th { "Name" }
                     th { "Year" }
                     th { "Bottles" }
+                    th { "Comment" }
                     th { "Grapes" }
                     th {}
                 }
@@ -89,6 +95,11 @@ pub(crate) async fn wine_table(axum::extract::State(state): axum::extract::State
                         td {(w.year)}
                         td {(w.num_bottles)}
                         td {
+                            @if let Some(comment) = w.last_comment {
+                                (comment)
+                            }
+                        }
+                        td {
                             ul {
                                 @for grape in w.grapes {
                                     li {
@@ -103,28 +114,28 @@ pub(crate) async fn wine_table(axum::extract::State(state): axum::extract::State
                                     "Action"
                                 }
                                 ul class="dropdown-menu" {
-                                    li { a class="dropdown-item" 
-                                        hx-target="#main" 
-                                        hx-get=(format!("/wines/{}/drink", w.id))  
-                                        { "Drink" } 
+                                    li { a class="dropdown-item"
+                                        hx-target="#main"
+                                        hx-get=(format!("/wines/{}/drink", w.id))
+                                        { "Drink" }
                                     }
 
-                                    li { a class="dropdown-item" 
-                                        hx-target="#main" 
-                                        hx-get=(format!("/wines/{}/buy", w.id))  
-                                        { "Buy" } 
+                                    li { a class="dropdown-item"
+                                        hx-target="#main"
+                                        hx-get=(format!("/wines/{}/buy", w.id))
+                                        { "Buy" }
                                     }
 
-                                    li { a class="dropdown-item" 
-                                        hx-target="#main" 
-                                        hx-get=(format!("/wines/{}/comment", w.id))  
-                                        { "Comment" } 
+                                    li { a class="dropdown-item"
+                                        hx-target="#main"
+                                        hx-get=(format!("/wines/{}/comment", w.id))
+                                        { "Comment" }
                                     }
 
                                     li { a class="dropdown-item" hx-target="#main" hx-get=(format!("/wines/{}/grapes", w.id))  { "Grapes" } }
                                     li { a hx-trigger="click" hx-target="#main" hx-get=(format!("/wines/{}/image", w.id)) class="dropdown-item" { "Upload Image" }}
 
-                                    li { a class="dropdown-item" 
+                                    li { a class="dropdown-item"
                                         hx-target="#main"
                                         hx-delete=(format!("/wines/{}", w.id))
                                         hx-confirm="Are you sure you wish to delete this wine?"
@@ -219,7 +230,9 @@ pub(crate) async fn edit_wine_grapes(
     }
 }
 
-pub(crate) async fn add_wine(axum::extract::State(_state): axum::extract::State<State>) -> maud::Markup {
+pub(crate) async fn add_wine(
+    axum::extract::State(_state): axum::extract::State<State>,
+) -> maud::Markup {
     tracing::info!("Adding wine");
     maud::html! {
         h1 { "Add wine" }
@@ -303,7 +316,9 @@ pub(crate) async fn buy_wine(axum::extract::Path(wine_id): axum::extract::Path<i
     }
 }
 
-pub(crate) async fn upload_wine_image(axum::extract::Path(wine_id): axum::extract::Path<i64>) -> Markup {
+pub(crate) async fn upload_wine_image(
+    axum::extract::Path(wine_id): axum::extract::Path<i64>,
+) -> Markup {
     maud::html! {
         h1 { "Upload image" }
         form hx-encoding="multipart/form-data" hx-post=(format!("/wines/{wine_id}/image")) {
