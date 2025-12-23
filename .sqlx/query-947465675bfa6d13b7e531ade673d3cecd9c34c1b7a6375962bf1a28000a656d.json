@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO wine_comments (wine_id, comment, dt) VALUES ($1, $2, $3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "947465675bfa6d13b7e531ade673d3cecd9c34c1b7a6375962bf1a28000a656d"
+}

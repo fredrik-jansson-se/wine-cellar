@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT dt,bottles from wine_inventory_events WHERE wine_id=$1",
+  "describe": {
+    "columns": [
+      {
+        "name": "dt",
+        "ordinal": 0,
+        "type_info": "Datetime"
+      },
+      {
+        "name": "bottles",
+        "ordinal": 1,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "f5fce26497f82d1aed829284e9351e7e2b37d5670744e5c07d70f4102f19dd9c"
+}

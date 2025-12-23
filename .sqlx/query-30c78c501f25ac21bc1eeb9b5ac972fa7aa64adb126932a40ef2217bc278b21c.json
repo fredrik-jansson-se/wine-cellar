@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT * from wines",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "year",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "image_b64",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "image_thumbnail_b64",
+        "ordinal": 4,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 0
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "30c78c501f25ac21bc1eeb9b5ac972fa7aa64adb126932a40ef2217bc278b21c"
+}

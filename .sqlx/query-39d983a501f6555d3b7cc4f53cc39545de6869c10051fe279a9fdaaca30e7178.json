@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM wine_inventory_events WHERE wine_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "39d983a501f6555d3b7cc4f53cc39545de6869c10051fe279a9fdaaca30e7178"
+}

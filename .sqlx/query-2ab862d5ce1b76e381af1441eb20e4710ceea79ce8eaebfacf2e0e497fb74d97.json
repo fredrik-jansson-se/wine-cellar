@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT grape_name FROM wine_grapes WHERE wine_id=$1",
+  "describe": {
+    "columns": [
+      {
+        "name": "grape_name",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "2ab862d5ce1b76e381af1441eb20e4710ceea79ce8eaebfacf2e0e497fb74d97"
+}

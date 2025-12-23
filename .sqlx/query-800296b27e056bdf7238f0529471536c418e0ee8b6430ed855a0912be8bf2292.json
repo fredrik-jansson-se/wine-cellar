@@ -1,0 +1,26 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT comment,dt FROM wine_comments WHERE wine_id=$1 ORDER by dt DESC",
+  "describe": {
+    "columns": [
+      {
+        "name": "comment",
+        "ordinal": 0,
+        "type_info": "Text"
+      },
+      {
+        "name": "dt",
+        "ordinal": 1,
+        "type_info": "Datetime"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "800296b27e056bdf7238f0529471536c418e0ee8b6430ed855a0912be8bf2292"
+}

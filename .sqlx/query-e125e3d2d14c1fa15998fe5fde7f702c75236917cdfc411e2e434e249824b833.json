@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO wine_inventory_events (wine_id, bottles, dt) VALUES ($1, $2, $3)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "e125e3d2d14c1fa15998fe5fde7f702c75236917cdfc411e2e434e249824b833"
+}

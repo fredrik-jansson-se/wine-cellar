@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM wine_comments WHERE wine_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "a05db94cfdb756e283b6193248e5c08663d1435bea6caa345d9da8f96839f637"
+}

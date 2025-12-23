@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO wine_grapes VALUES($1, $2)",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "3b723d316c9c06f49ee6f7fdc898d0527bb71bc51bbec6c7fb28c2032c6c55a6"
+}

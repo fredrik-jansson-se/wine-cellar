@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "DELETE FROM wine_grapes WHERE wine_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": []
+  },
+  "hash": "9eea4ad46d636db1b7b8bf247d79fbc9a71e4a5b1f238d12e35109629a9e4b3b"
+}
