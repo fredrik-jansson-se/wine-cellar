@@ -1,0 +1,128 @@
+use super::State;
+use axum::response::IntoResponseParts;
+use base64::Engine;
+
+use crate::db;
+
+#[derive(serde::Deserialize, Debug)]
+pub(crate) struct AddWine {
+    name: String,
+    year: i64,
+}
+
+pub(crate) async fn add_wine_post(
+    axum::extract::State(state): axum::extract::State<State>,
+    axum::Form(wine): axum::Form<AddWine>,
+) -> (impl IntoResponseParts, &'static str) {
+    tracing::info!("Adding wine: {wine:?}");
+    {
+        let state = state.lock().await;
+        db::add_wine(&state.db, &wine.name, wine.year)
+            .await
+            .expect("Add wine");
+    }
+    (axum_htmx::HxRedirect("/".to_owned()), "")
+}
+
+pub(crate) async fn delete_wine(
+    axum::extract::State(state): axum::extract::State<State>,
+    axum::extract::Path(wine_id): axum::extract::Path<i64>,
+) -> (impl IntoResponseParts, &'static str) {
+    let state = state.lock().await;
+
+    db::delete_wine(&state.db, wine_id)
+        .await
+        .expect("Delete wine");
+    (axum_htmx::HxRedirect("/".to_owned()), "")
+}
+
+pub(crate) async fn post_wine_grapes(
+    axum::extract::State(state): axum::extract::State<State>,
+    axum::extract::Path(wine_id): axum::extract::Path<i64>,
+    axum::extract::RawForm(form): axum::extract::RawForm,
+) -> (impl IntoResponseParts, &'static str) {
+    // form is b"grapes=Barbera&grapes=Gamay"
+    let data = percent_encoding::percent_decode(&form)
+        .decode_utf8()
+        .expect("Valid utf-8");
+
+    tracing::info!("Data: {data}");
+    let mut grapes = Vec::new();
+    for grape in data.split("&") {
+        let item = grape.split("=").nth(1);
+        if let Some(i) = item {
+            grapes.push(i);
+        }
+    }
+
+    let state = state.lock().await;
+    db::set_wine_grapes(&state.db, wine_id, &grapes)
+        .await
+        .expect("Can set grapes");
+    (axum_htmx::HxRedirect("/".to_owned()), "")
+}
+
+
+#[derive(serde::Deserialize)]
+pub(crate) struct AddComment {
+    comment: String,
+}
+
+pub(crate) async fn add_comment(
+    axum::extract::State(state): axum::extract::State<State>,
+    axum::extract::Path(wine_id): axum::extract::Path<i64>,
+    axum::extract::Form(comment): axum::extract::Form<AddComment>,
+) -> (impl IntoResponseParts, &'static str) {
+    let state = state.lock().await;
+    let now = chrono::Local::now().naive_local();
+    db::add_wine_comment(&state.db, wine_id, &comment.comment, now)
+        .await
+        .expect("Add comment");
+    (axum_htmx::HxRedirect("/".to_owned()), "")
+}
+
+
+fn convert_and_thumbnail(image_data: &[u8]) -> anyhow::Result<(String, String)> {
+    let reader = image::ImageReader::new(std::io::Cursor::new(image_data)).with_guessed_format()?;
+
+    let image = reader.decode()?;
+    let thumbnail = image.thumbnail(160, 160);
+    let image = image.resize(512, 512, image::imageops::Gaussian);
+
+    let mut image_encoded = Vec::new();
+    let mut cursor = std::io::Cursor::new(&mut image_encoded);
+    image.write_to(&mut cursor, image::ImageFormat::Png)?;
+
+    let mut thumbnail_encoded = Vec::new();
+    let mut cursor = std::io::Cursor::new(&mut thumbnail_encoded);
+    thumbnail.write_to(&mut cursor, image::ImageFormat::Png)?;
+
+    let img_64 = base64::prelude::BASE64_STANDARD_NO_PAD.encode(&image_encoded);
+    let tn_u64 = base64::prelude::BASE64_STANDARD_NO_PAD.encode(&thumbnail_encoded);
+
+    Ok((img_64, tn_u64))
+}
+
+#[tracing::instrument(skip(state))]
+pub(crate) async fn set_wine_image(
+    axum::extract::State(state): axum::extract::State<State>,
+    axum::extract::Path(wine_id): axum::extract::Path<i64>,
+    mut mp: axum::extract::Multipart,
+) -> (impl IntoResponseParts, &'static str) {
+    tracing::info!("new image");
+
+    while let Some(field) = mp.next_field().await.expect("Get next multipart field") {
+        if let Some("image") = field.name() {
+            let image_data = field.bytes().await.expect("Get image data");
+
+            tracing::info!("Got image with size: {}", image_data.len());
+            let (image, thumbnail) = convert_and_thumbnail(&image_data).expect("Convert image");
+            let state = state.lock().await;
+            db::set_wine_image(&state.db, wine_id, &image, &thumbnail)
+                .await
+                .expect("Update image in db");
+        }
+    }
+    (axum_htmx::HxRedirect("/".to_owned()), "")
+}
+
