@@ -87,12 +87,19 @@ pub(crate) async fn get_wine(db: &sqlx::SqlitePool, id: i64) -> anyhow::Result<W
     Ok(res)
 }
 
+pub(crate) async fn get_grapes(db: &sqlx::SqlitePool) -> anyhow::Result<Vec<String>> {
+    let res = sqlx::query_scalar!("SELECT name FROM grapes ORDER BY name")
+        .fetch_all(db)
+        .await?;
+    Ok(res)
+}
+
 pub(crate) async fn get_wine_grapes(
     db: &sqlx::SqlitePool,
     wine_id: i64,
 ) -> anyhow::Result<Vec<String>> {
     let res = sqlx::query_scalar!(
-        "SELECT grape_name FROM wine_grapes WHERE wine_id=$1",
+        "SELECT grape_name FROM wine_grapes WHERE wine_id=$1 ORDER BY grape_name",
         wine_id
     )
     .fetch_all(db)
@@ -123,12 +130,6 @@ pub(crate) async fn set_wine_grapes(
     Ok(())
 }
 
-pub(crate) async fn get_grapes(db: &sqlx::SqlitePool) -> anyhow::Result<Vec<String>> {
-    let res = sqlx::query_scalar!("SELECT name FROM grapes")
-        .fetch_all(db)
-        .await?;
-    Ok(res)
-}
 
 // Assumes b64 encoded image and thumbnail
 pub(crate) async fn set_wine_image(
