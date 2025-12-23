@@ -21,7 +21,6 @@ pub(crate) async fn connect() -> anyhow::Result<sqlx::SqlitePool> {
     let cfg = sqlx::sqlite::SqliteConnectOptions::from_str(
         &std::env::var("DATABASE_URL").context("DATABASE_URL not set")?,
     )?
-    .auto_vacuum(sqlx::sqlite::SqliteAutoVacuum::Full)
     .journal_mode(sqlx::sqlite::SqliteJournalMode::Wal)
     .create_if_missing(true);
     let db = sqlx::SqlitePool::connect_with(cfg).await?;
@@ -176,6 +175,25 @@ pub(crate) async fn add_wine_comment(
         "INSERT INTO wine_comments (wine_id, comment, dt) VALUES ($1, $2, $3)",
         wine_id,
         comment,
+        dt
+    )
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+#[tracing::instrument(skip(db))]
+pub(crate) async fn add_wine_event(
+    db: &sqlx::SqlitePool,
+    wine_id: i64,
+    bottles: i64,
+    dt: chrono::NaiveDateTime,
+) -> anyhow::Result<()> {
+    tracing::info!("wine event");
+    sqlx::query!(
+        "INSERT INTO wine_inventory_events (wine_id, bottles, dt) VALUES ($1, $2, $3)",
+        wine_id,
+        bottles,
         dt
     )
     .execute(db)

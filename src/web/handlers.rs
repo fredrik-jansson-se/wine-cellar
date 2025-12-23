@@ -1,8 +1,34 @@
 use super::State;
-use axum::response::IntoResponseParts;
+use axum::response::{IntoResponse, IntoResponseParts};
 use base64::Engine;
 
 use crate::db;
+
+// Error handling
+
+type MDResult = std::result::Result<maud::Markup, AppError>;
+
+pub(crate) struct AppError(anyhow::Error);
+
+impl IntoResponse for AppError {
+    fn into_response(self) -> axum::response::Response {
+        tracing::error!("{}", self.0);
+        (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            format!("{}", self.0),
+        )
+            .into_response()
+    }
+}
+
+impl<E> From<E> for AppError
+where
+    E: Into<anyhow::Error>,
+{
+    fn from(err: E) -> Self {
+        Self(err.into())
+    }
+}
 
 #[derive(serde::Deserialize, Debug)]
 pub(crate) struct AddWine {
@@ -62,7 +88,6 @@ pub(crate) async fn post_wine_grapes(
     (axum_htmx::HxRedirect("/".to_owned()), "")
 }
 
-
 #[derive(serde::Deserialize)]
 pub(crate) struct AddComment {
     comment: String,
@@ -81,6 +106,52 @@ pub(crate) async fn add_comment(
     (axum_htmx::HxRedirect("/".to_owned()), "")
 }
 
+#[derive(serde::Deserialize, Debug)]
+pub(crate) struct BuyWine {
+    dt: String,
+    bottles: i64,
+}
+
+#[tracing::instrument(skip(state))]
+pub(crate) async fn buy_wine(
+    axum::extract::State(state): axum::extract::State<State>,
+    axum::extract::Path(wine_id): axum::extract::Path<i64>,
+    axum::extract::Form(event): axum::extract::Form<BuyWine>,
+) -> MDResult {
+    tracing::info!("buy wine");
+    {
+        let state = state.lock().await;
+        let date = chrono::NaiveDate::parse_from_str(&event.dt, "%Y-%m-%d")?;
+        let dt = chrono::NaiveDateTime::new(date, chrono::Local::now().naive_local().time());
+        db::add_wine_event(&state.db, wine_id, event.bottles, dt).await?;
+    }
+    Ok(super::markup::wine_table(axum::extract::State(state)).await)
+}
+
+#[derive(serde::Deserialize, Debug)]
+pub(crate) struct DrinkWine {
+    dt: String,
+    bottles: i64,
+}
+
+#[tracing::instrument(skip(state))]
+pub(crate) async fn drink_wine(
+    axum::extract::State(state): axum::extract::State<State>,
+    axum::extract::Path(wine_id): axum::extract::Path<i64>,
+    axum::extract::Form(event): axum::extract::Form<DrinkWine>,
+) -> MDResult {
+    tracing::info!("drink wine");
+    {
+        let state = state.lock().await;
+        let date = chrono::NaiveDate::parse_from_str(&event.dt, "%Y-%m-%d")?;
+        let dt = chrono::NaiveDateTime::new(date, chrono::Local::now().naive_local().time());
+
+        // Drinking is negative bottles
+        let bottles = -event.bottles;
+        db::add_wine_event(&state.db, wine_id, bottles, dt).await?;
+    }
+    Ok(super::markup::wine_table(axum::extract::State(state)).await)
+}
 
 fn convert_and_thumbnail(image_data: &[u8]) -> anyhow::Result<(String, String)> {
     let reader = image::ImageReader::new(std::io::Cursor::new(image_data)).with_guessed_format()?;
@@ -125,4 +196,3 @@ pub(crate) async fn set_wine_image(
     }
     (axum_htmx::HxRedirect("/".to_owned()), "")
 }
-

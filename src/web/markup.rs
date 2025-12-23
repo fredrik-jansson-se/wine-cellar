@@ -103,15 +103,33 @@ pub(crate) async fn wine_table(axum::extract::State(state): axum::extract::State
                                     "Action"
                                 }
                                 ul class="dropdown-menu" {
-                                    li { a class="dropdown-item" { "Drink" } }
-                                    li { a class="dropdown-item" { "Buy" } }
-                                    li { a class="dropdown-item" hx-target="#main" hx-get=(format!("/wines/{}/comment", w.id))  { "Comment" } }
+                                    li { a class="dropdown-item" 
+                                        hx-target="#main" 
+                                        hx-get=(format!("/wines/{}/drink", w.id))  
+                                        { "Drink" } 
+                                    }
+
+                                    li { a class="dropdown-item" 
+                                        hx-target="#main" 
+                                        hx-get=(format!("/wines/{}/buy", w.id))  
+                                        { "Buy" } 
+                                    }
+
+                                    li { a class="dropdown-item" 
+                                        hx-target="#main" 
+                                        hx-get=(format!("/wines/{}/comment", w.id))  
+                                        { "Comment" } 
+                                    }
+
                                     li { a class="dropdown-item" hx-target="#main" hx-get=(format!("/wines/{}/grapes", w.id))  { "Grapes" } }
                                     li { a hx-trigger="click" hx-target="#main" hx-get=(format!("/wines/{}/image", w.id)) class="dropdown-item" { "Upload Image" }}
-                                    li { a hx-target="#main"
-                                           hx-delete=(format!("/wines/{}", w.id))
-                                           hx-confirm="Are you sure you wish to delete this wine?"
-                                           class="dropdown-item" { "Delete" }}
+
+                                    li { a class="dropdown-item" 
+                                        hx-target="#main"
+                                        hx-delete=(format!("/wines/{}", w.id))
+                                        hx-confirm="Are you sure you wish to delete this wine?"
+                                        { "Delete" }
+                                    }
                                 }
                             }
                         }
@@ -235,6 +253,49 @@ pub(crate) async fn add_comment(axum::extract::Path(wine_id): axum::extract::Pat
             div class="mb-3" {
                 input type="submit" value="Add" class="btn btn-primary" {}
                 button hx-trigger="click" hx-target="#main" hx-swap="innerHTML" hx-get="/" class="btn btn-primary" {
+                    "Cancel"
+                }
+            }
+        }
+    }
+}
+
+pub(crate) async fn drink_wine(axum::extract::Path(wine_id): axum::extract::Path<i64>) -> Markup {
+    tracing::info!("drink_wine");
+    maud::html! {
+        form id="drink-wine" hx-post=(format!("/wines/{wine_id}/drink")) hx-target="#main" {
+            div class="mb-3" {
+                label for="dt" class="form-label" { "Date" }
+                input name="dt" id="dt" type="date" class="form-control" {}
+            }
+            div class="mb-3" {
+                label for="bottles" class="form-label" { "Bottles" }
+                input name="bottles" id="bottles" type="number" value="1" class="form-control" {}
+            }
+            div class="mb-3" {
+                input type="submit" value="Drink" class="btn btn-primary" {}
+                button hx-trigger="click" hx-target="#main" hx-get="/wines" class="btn btn-primary" {
+                    "Cancel"
+                }
+            }
+        }
+    }
+}
+pub(crate) async fn buy_wine(axum::extract::Path(wine_id): axum::extract::Path<i64>) -> Markup {
+    tracing::info!("buy_wine");
+    maud::html! {
+        form id="buy-wine" hx-post=(format!("/wines/{wine_id}/buy")) hx-target="#main" {
+            div class="mb-3" {
+                label for="dt" class="form-label" { "Date" }
+                input name="dt" id="dt" type="date" class="form-control" {}
+            }
+            div class="mb-3" {
+                label for="bottles" class="form-label" { "Bottles" }
+                input name="bottles" id="bottles" type="number" class="form-control" {}
+            }
+            div class="mb-3" {
+                input type="submit" value="Buy" class="btn btn-primary" {}
+                button hx-trigger="click" hx-target="#main" hx-get="/wines" class="btn btn-primary" {
                     "Cancel"
                 }
             }
