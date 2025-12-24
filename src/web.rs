@@ -1,3 +1,5 @@
+use axum::response::IntoResponse;
+
 mod handlers;
 mod markup;
 
@@ -6,6 +8,34 @@ struct StateInner {
 }
 
 type State = std::sync::Arc<tokio::sync::Mutex<StateInner>>;
+
+type MDResult = std::result::Result<maud::Markup, AppError>;
+
+pub(crate) struct AppError(anyhow::Error);
+
+impl<E> From<E> for AppError
+where
+    E: Into<anyhow::Error>,
+{
+    fn from(err: E) -> Self {
+        Self(err.into())
+    }
+}
+
+impl IntoResponse for AppError {
+    fn into_response(self) -> axum::response::Response {
+        tracing::error!("{}", self.0);
+        (
+            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            maud::html! {
+                div class="text-bg-danger p-3" {
+                    (self.0)
+                }
+            },
+        )
+            .into_response()
+    }
+}
 
 pub async fn run(db: sqlx::SqlitePool) -> anyhow::Result<()> {
     let state = std::sync::Arc::new(tokio::sync::Mutex::new(StateInner { db }));

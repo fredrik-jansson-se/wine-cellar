@@ -1,5 +1,5 @@
 use super::State;
-use crate::db;
+use crate::{db, web::MDResult};
 use maud::Markup;
 
 pub(crate) async fn index() -> Markup {
@@ -12,10 +12,11 @@ pub(crate) async fn index() -> Markup {
          rel="stylesheet" integrity="sha384-sRIl4kxILFvY47J16cr9ZwB07vP4J8+LH7qKQnuqkuIAvNWLzeN8tE5YBujZqJLB"
          crossorigin="anonymous";
      script src="https://cdn.jsdelivr.net/npm/htmx.org@2.0.8/dist/htmx.min.js" {}
-
-     body {
+     script src="https://cdn.jsdelivr.net/npm/htmx-ext-response-targets@2.0.4" integrity="sha384-T41oglUPvXLGBVyRdZsVRxNWnOOqCynaPubjUVjxhsjFTKrFJGEMm3/0KGmNQ+Pg" crossorigin="anonymous" {}
+     body hx-ext="response-targets" {
        div id="main" class="container" {
-         div hx-get="/wines" hx-trigger="load" hx-target="#main" {}
+         div id="error" {}
+         div hx-get="/wines" hx-trigger="load" hx-target="#main" hx-target-error="#error" {}
        }
        script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
          integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI"
@@ -24,10 +25,18 @@ pub(crate) async fn index() -> Markup {
     }
 }
 
-pub(crate) async fn wine_table(axum::extract::State(state): axum::extract::State<State>) -> Markup {
+fn page_header(header: &str) -> Markup {
+    maud::html! {
+        h1 class="display-1" {(header)}
+    }
+}
+
+pub(crate) async fn wine_table(
+    axum::extract::State(state): axum::extract::State<State>,
+) -> MDResult {
     tracing::info!("wine_table");
     let state = state.lock().await;
-    let wines = db::wines(&state.db).await.expect("get wines");
+    let wines = db::wines(&state.db).await?;
 
     let mut disp_wines = Vec::with_capacity(wines.len());
     struct MainWine {
@@ -41,16 +50,10 @@ pub(crate) async fn wine_table(axum::extract::State(state): axum::extract::State
     }
 
     for wine in wines {
-        let inv_events = db::wine_inventory_events(&state.db, wine.id)
-            .await
-            .expect("Get inventory");
+        let inv_events = db::wine_inventory_events(&state.db, wine.id).await?;
         let inventory: i64 = inv_events.iter().map(|ie| ie.bottles).sum();
-        let wine_grapes = db::get_wine_grapes(&state.db, wine.id)
-            .await
-            .expect("Get wine grapes");
-        let last_comment = db::last_wine_comment(&state.db, wine.id)
-            .await
-            .expect("Last comment");
+        let wine_grapes = db::get_wine_grapes(&state.db, wine.id).await?;
+        let last_comment = db::last_wine_comment(&state.db, wine.id).await?;
         disp_wines.push(MainWine {
             id: wine.id,
             name: wine.name,
@@ -62,9 +65,10 @@ pub(crate) async fn wine_table(axum::extract::State(state): axum::extract::State
         });
     }
 
-    maud::html! {
-        h1 {"Wine Cellar"}
+    Ok(maud::html! {
+        (page_header("Wine Cellar"))
         a href="#" hx-trigger="click" hx-target="#main" hx-get="/add-wine" { "Add Wine" }
+        div id="error" {}
         table class="table table-striped" {
             thead {
                 tr {
@@ -89,7 +93,7 @@ pub(crate) async fn wine_table(axum::extract::State(state): axum::extract::State
                         td {
                             a href="#"
                               class="link-primary"
-                              hx-trigger="click" hx-target="#main" hx-get=(format!("/wines/{}", w.id))
+                              hx-trigger="click" hx-target="#main" hx-target-error="#error" hx-get=(format!("/wines/{}", w.id))
                                 { (w.name)}
                         }
                         td {(w.year)}
@@ -116,27 +120,40 @@ pub(crate) async fn wine_table(axum::extract::State(state): axum::extract::State
                                 ul class="dropdown-menu" {
                                     li { a class="dropdown-item"
                                         hx-target="#main"
+                                        hx-target-error="#error"
                                         hx-get=(format!("/wines/{}/drink", w.id))
                                         { "Drink" }
                                     }
 
                                     li { a class="dropdown-item"
                                         hx-target="#main"
+                                        hx-target-error="#error"
                                         hx-get=(format!("/wines/{}/buy", w.id))
                                         { "Buy" }
                                     }
 
                                     li { a class="dropdown-item"
                                         hx-target="#main"
+                                        hx-target-error="#error"
                                         hx-get=(format!("/wines/{}/comment", w.id))
                                         { "Comment" }
                                     }
 
-                                    li { a class="dropdown-item" hx-target="#main" hx-get=(format!("/wines/{}/grapes", w.id))  { "Grapes" } }
-                                    li { a hx-trigger="click" hx-target="#main" hx-get=(format!("/wines/{}/image", w.id)) class="dropdown-item" { "Upload Image" }}
+                                    li { a class="dropdown-item"
+                                        hx-target="#main"
+                                        hx-target-error="#error"
+                                        hx-get=(format!("/wines/{}/grapes", w.id))
+                                        { "Grapes" } }
+                                    li { a class="dropdown-item"
+                                        hx-trigger="click"
+                                        hx-target="#main"
+                                        hx-target-error="#error"
+                                        hx-get=(format!("/wines/{}/image", w.id)) class="dropdown-item"
+                                        { "Upload Image" }}
 
                                     li { a class="dropdown-item"
                                         hx-target="#main"
+                                        hx-target-error="#error"
                                         hx-delete=(format!("/wines/{}", w.id))
                                         hx-confirm="Are you sure you wish to delete this wine?"
                                         { "Delete" }
@@ -148,27 +165,21 @@ pub(crate) async fn wine_table(axum::extract::State(state): axum::extract::State
                 }
             }
         }
-    }
+    })
 }
 
 #[tracing::instrument(skip(state))]
 pub(crate) async fn wine_information(
     axum::extract::State(state): axum::extract::State<State>,
     axum::extract::Path(wine_id): axum::extract::Path<i64>,
-) -> Markup {
+) -> MDResult {
     tracing::info!("enter");
     let state = state.lock().await;
-    let wine = db::get_wine(&state.db, wine_id)
-        .await
-        .expect("Get wine info");
-    let events = db::wine_inventory_events(&state.db, wine_id)
-        .await
-        .expect("Get events");
-    let comments = db::wine_comments(&state.db, wine_id)
-        .await
-        .expect("Get wine comments");
-    maud::html! {
-        h1 {(wine.name)}
+    let wine = db::get_wine(&state.db, wine_id).await?;
+    let events = db::wine_inventory_events(&state.db, wine_id).await?;
+    let comments = db::wine_comments(&state.db, wine_id).await?;
+    Ok(maud::html! {
+        (page_header(&wine.name))
         a href="/" { "Back" }
         div class="row align-items-start" {
             div class="col" {
@@ -201,42 +212,38 @@ pub(crate) async fn wine_information(
                 }
             }
         }
-    }
+    })
 }
 
 pub(crate) async fn edit_wine_grapes(
     axum::extract::State(state): axum::extract::State<State>,
     axum::extract::Path(wine_id): axum::extract::Path<i64>,
-) -> Markup {
+) -> MDResult {
     let state = state.lock().await;
-    let wine_grapes = db::get_wine_grapes(&state.db, wine_id)
-        .await
-        .expect("Get wine grapes");
-    let all_grapes = db::get_grapes(&state.db).await.expect("Get grapes");
-    maud::html! {
+    let wine_grapes = db::get_wine_grapes(&state.db, wine_id).await?;
+    let all_grapes = db::get_grapes(&state.db).await?;
+    Ok(maud::html! {
         form hx-post=(format!("/wines/{}/grapes", wine_id)) hx-swap="none" {
             input type="submit" value="Set Grapes" class="btn btn-primary" {}
             @for grape in all_grapes {
                 div class="form-check" {
-                    // @if wine_grapes.contains(&grape) {
                     input class="form-check-input" name="grapes" type="checkbox" value=(grape) id=(grape) checked[(wine_grapes.contains(&grape))]
-                        // } @else {
-                        // input class="form-check-input" name="grapes" type="checkbox" value=(grape) id=(grape);
-                        // }
-                        label class="form-check-label" for=(grape) { (grape) }
+                    label class="form-check-label" for=(grape) { (grape) }
                 }
             }
         }
-    }
+    })
 }
 
 pub(crate) async fn add_wine(
     axum::extract::State(_state): axum::extract::State<State>,
-) -> maud::Markup {
+) -> MDResult {
     tracing::info!("Adding wine");
-    maud::html! {
-        h1 { "Add wine" }
-        form id="add-wine" hx-post="/add-wine" hx-target="#main" {
+    Ok(maud::html! {
+        (page_header("Add Wine"))
+        div id="error" {}
+        form id="add-wine"
+            hx-post="/add-wine" hx-target="#main" hx-target-error="#error" {
             div class="mb-3" {
                 label for="name" class="form-label" { "Name" }
                 input name="name" id="name" class="form-control" {}
@@ -252,8 +259,7 @@ pub(crate) async fn add_wine(
                 }
             }
         }
-
-    }
+    })
 }
 
 pub(crate) async fn add_comment(axum::extract::Path(wine_id): axum::extract::Path<i64>) -> Markup {
@@ -276,7 +282,11 @@ pub(crate) async fn add_comment(axum::extract::Path(wine_id): axum::extract::Pat
 pub(crate) async fn drink_wine(axum::extract::Path(wine_id): axum::extract::Path<i64>) -> Markup {
     tracing::info!("drink_wine");
     maud::html! {
-        form id="drink-wine" hx-post=(format!("/wines/{wine_id}/drink")) hx-target="#main" {
+        div id="error" {}
+        form id="drink-wine" 
+            hx-post=(format!("/wines/{wine_id}/drink")) 
+            hx-target="#main" 
+            hx-target-error="#error" {
             div class="mb-3" {
                 label for="dt" class="form-label" { "Date" }
                 input name="dt" id="dt" type="date" class="form-control" {}
@@ -297,7 +307,10 @@ pub(crate) async fn drink_wine(axum::extract::Path(wine_id): axum::extract::Path
 pub(crate) async fn buy_wine(axum::extract::Path(wine_id): axum::extract::Path<i64>) -> Markup {
     tracing::info!("buy_wine");
     maud::html! {
-        form id="buy-wine" hx-post=(format!("/wines/{wine_id}/buy")) hx-target="#main" {
+        div id="error" {}
+        form id="buy-wine" hx-post=(format!("/wines/{wine_id}/buy")) 
+            hx-target="#main"
+            hx-target-error="#error" {
             div class="mb-3" {
                 label for="dt" class="form-label" { "Date" }
                 input name="dt" id="dt" type="date" class="form-control" {}
@@ -320,8 +333,12 @@ pub(crate) async fn upload_wine_image(
     axum::extract::Path(wine_id): axum::extract::Path<i64>,
 ) -> Markup {
     maud::html! {
-        h1 { "Upload image" }
-        form hx-encoding="multipart/form-data" hx-post=(format!("/wines/{wine_id}/image")) {
+        (page_header("Upload Image"))
+        div id="error" {}
+        form hx-encoding="multipart/form-data" 
+            hx-target="#main"
+            hx-target-error="#error"
+            hx-post=(format!("/wines/{wine_id}/image")) {
            input type="file" name="image";
            input type="submit" value="Upload" class="btn btn-primary" {}
         }

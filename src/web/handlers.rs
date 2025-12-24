@@ -1,34 +1,8 @@
-use super::State;
-use axum::response::{IntoResponse, IntoResponseParts};
+use super::{MDResult, State};
+use anyhow::Context;
 use base64::Engine;
 
 use crate::db;
-
-// Error handling
-
-type MDResult = std::result::Result<maud::Markup, AppError>;
-
-pub(crate) struct AppError(anyhow::Error);
-
-impl IntoResponse for AppError {
-    fn into_response(self) -> axum::response::Response {
-        tracing::error!("{}", self.0);
-        (
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
-            format!("{}", self.0),
-        )
-            .into_response()
-    }
-}
-
-impl<E> From<E> for AppError
-where
-    E: Into<anyhow::Error>,
-{
-    fn from(err: E) -> Self {
-        Self(err.into())
-    }
-}
 
 #[derive(serde::Deserialize, Debug)]
 pub(crate) struct AddWine {
@@ -46,30 +20,28 @@ pub(crate) async fn add_wine(
         let state = state.lock().await;
         db::add_wine(&state.db, &wine.name, wine.year).await?;
     }
-    Ok(super::markup::wine_table(axum::extract::State(state)).await)
+    super::markup::wine_table(axum::extract::State(state)).await
 }
 
 pub(crate) async fn delete_wine(
     axum::extract::State(state): axum::extract::State<State>,
     axum::extract::Path(wine_id): axum::extract::Path<i64>,
-) -> (impl IntoResponseParts, &'static str) {
-    let state = state.lock().await;
+) -> MDResult {
+    {
+        let state = state.lock().await;
 
-    db::delete_wine(&state.db, wine_id)
-        .await
-        .expect("Delete wine");
-    (axum_htmx::HxRedirect("/".to_owned()), "")
+        db::delete_wine(&state.db, wine_id).await?;
+    }
+    super::markup::wine_table(axum::extract::State(state)).await
 }
 
 pub(crate) async fn post_wine_grapes(
     axum::extract::State(state): axum::extract::State<State>,
     axum::extract::Path(wine_id): axum::extract::Path<i64>,
     axum::extract::RawForm(form): axum::extract::RawForm,
-) -> (impl IntoResponseParts, &'static str) {
+) -> MDResult {
     // form is b"grapes=Barbera&grapes=Gamay"
-    let data = percent_encoding::percent_decode(&form)
-        .decode_utf8()
-        .expect("Valid utf-8");
+    let data = percent_encoding::percent_decode(&form).decode_utf8()?;
 
     tracing::info!("Data: {data}");
     let mut grapes = Vec::new();
@@ -80,11 +52,11 @@ pub(crate) async fn post_wine_grapes(
         }
     }
 
-    let state = state.lock().await;
-    db::set_wine_grapes(&state.db, wine_id, &grapes)
-        .await
-        .expect("Can set grapes");
-    (axum_htmx::HxRedirect("/".to_owned()), "")
+    {
+        let state = state.lock().await;
+        db::set_wine_grapes(&state.db, wine_id, &grapes).await?;
+    }
+    super::markup::wine_table(axum::extract::State(state)).await
 }
 
 #[derive(serde::Deserialize)]
@@ -102,7 +74,7 @@ pub(crate) async fn add_comment(
         let now = chrono::Local::now().naive_local();
         db::add_wine_comment(&state.db, wine_id, &comment.comment, now).await?;
     }
-    Ok(super::markup::wine_table(axum::extract::State(state)).await)
+    super::markup::wine_table(axum::extract::State(state)).await
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -124,7 +96,7 @@ pub(crate) async fn buy_wine(
         let dt = chrono::NaiveDateTime::new(date, chrono::Local::now().naive_local().time());
         db::add_wine_event(&state.db, wine_id, event.bottles, dt).await?;
     }
-    Ok(super::markup::wine_table(axum::extract::State(state)).await)
+    super::markup::wine_table(axum::extract::State(state)).await
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -149,7 +121,7 @@ pub(crate) async fn drink_wine(
         let bottles = -event.bottles;
         db::add_wine_event(&state.db, wine_id, bottles, dt).await?;
     }
-    Ok(super::markup::wine_table(axum::extract::State(state)).await)
+    super::markup::wine_table(axum::extract::State(state)).await
 }
 
 fn convert_and_thumbnail(image_data: &[u8]) -> anyhow::Result<(String, String)> {
@@ -178,20 +150,19 @@ pub(crate) async fn set_wine_image(
     axum::extract::State(state): axum::extract::State<State>,
     axum::extract::Path(wine_id): axum::extract::Path<i64>,
     mut mp: axum::extract::Multipart,
-) -> (impl IntoResponseParts, &'static str) {
+) -> MDResult {
     tracing::info!("new image");
 
-    while let Some(field) = mp.next_field().await.expect("Get next multipart field") {
+    while let Some(field) = mp.next_field().await? {
         if let Some("image") = field.name() {
-            let image_data = field.bytes().await.expect("Get image data");
+            let image_data = field.bytes().await?;
 
             tracing::info!("Got image with size: {}", image_data.len());
-            let (image, thumbnail) = convert_and_thumbnail(&image_data).expect("Convert image");
+            let (image, thumbnail) =
+                convert_and_thumbnail(&image_data).context("Image conversion")?;
             let state = state.lock().await;
-            db::set_wine_image(&state.db, wine_id, &image, &thumbnail)
-                .await
-                .expect("Update image in db");
+            db::set_wine_image(&state.db, wine_id, &image, &thumbnail).await?;
         }
     }
-    (axum_htmx::HxRedirect("/".to_owned()), "")
+    super::markup::wine_table(axum::extract::State(state)).await
 }
