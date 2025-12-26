@@ -43,8 +43,8 @@ fn add_wine_modal() -> Markup {
                         h5 class="modal-title" { "Add Wine" }
                         button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" {}
                     }
-                    form id="add-wine" 
-                        hx-post="/add-wine" hx-target="#main" hx-target-error="#error" {
+                    form id="add-wine"
+                        hx-post="/add-wine" hx-target="#wineTable" hx-swap="beforeend" hx-target-error="#error" {
                         div class="modal-body" {
                             div class="mb-3" {
                                 label for="name" class="form-label" { "Name" }
@@ -66,14 +66,10 @@ fn add_wine_modal() -> Markup {
     }
 }
 
-pub(crate) async fn wine_table(
-    axum::extract::State(state): axum::extract::State<State>,
+pub(crate) async fn wine_table_row(
+    state: &crate::web::StateInner,
+    wine: crate::db::Wine,
 ) -> MDResult {
-    tracing::info!("wine_table");
-    let state = state.lock().await;
-    let wines = db::wines(&state.db).await?;
-
-    let mut disp_wines = Vec::with_capacity(wines.len());
     struct MainWine {
         id: i64,
         name: String,
@@ -83,22 +79,110 @@ pub(crate) async fn wine_table(
         thumbnail: Option<String>,
         grapes: Vec<String>,
     }
+    let inv_events = db::wine_inventory_events(&state.db, wine.id).await?;
+    let inventory: i64 = inv_events.iter().map(|ie| ie.bottles).sum();
+    let wine_grapes = db::get_wine_grapes(&state.db, wine.id).await?;
+    let last_comment = db::last_wine_comment(&state.db, wine.id).await?;
+    let w = MainWine {
+        id: wine.id,
+        name: wine.name,
+        year: wine.year,
+        num_bottles: inventory,
+        last_comment: last_comment.map(|c| c.comment),
+        thumbnail: wine.image_thumbnail_b64,
+        grapes: wine_grapes,
+    };
 
-    for wine in wines {
-        let inv_events = db::wine_inventory_events(&state.db, wine.id).await?;
-        let inventory: i64 = inv_events.iter().map(|ie| ie.bottles).sum();
-        let wine_grapes = db::get_wine_grapes(&state.db, wine.id).await?;
-        let last_comment = db::last_wine_comment(&state.db, wine.id).await?;
-        disp_wines.push(MainWine {
-            id: wine.id,
-            name: wine.name,
-            year: wine.year,
-            num_bottles: inventory,
-            last_comment: last_comment.map(|c| c.comment),
-            thumbnail: wine.image_thumbnail_b64,
-            grapes: wine_grapes,
-        });
-    }
+    Ok(maud::html! {
+        tr id=(format!("wine-{}", w.id)) {
+            td {
+                @if let Some(tn) = &w.thumbnail {
+                    img src=(format!("data:image/png;base64, {tn}"));
+
+                }
+            }
+            td {
+                a href="#"
+                  class="link-primary"
+                  hx-trigger="click" hx-target="#main" hx-target-error="#error" hx-get=(format!("/wines/{}", w.id))
+                    { (w.name)}
+            }
+            td {(w.year)}
+            td {(w.num_bottles)}
+            td {
+                @if let Some(comment) = w.last_comment {
+                    (comment)
+                }
+            }
+            td {
+                ul {
+                    @for grape in w.grapes {
+                        li {
+                            (grape)
+                        }
+                    }
+                }
+            }
+            td {
+                div class="dropdown" {
+                    button class="btn btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" {
+                        "Action"
+                    }
+                    ul class="dropdown-menu" {
+                        li { a class="dropdown-item"
+                            hx-target="#main"
+                            hx-target-error="#error"
+                            hx-get=(format!("/wines/{}/drink", w.id))
+                            { "Drink" }
+                        }
+
+                        li { a class="dropdown-item"
+                            hx-target="#main"
+                            hx-target-error="#error"
+                            hx-get=(format!("/wines/{}/buy", w.id))
+                            { "Buy" }
+                        }
+
+                        li { a class="dropdown-item"
+                            hx-target="#main"
+                            hx-target-error="#error"
+                            hx-get=(format!("/wines/{}/comment", w.id))
+                            { "Comment" }
+                        }
+
+                        li { a class="dropdown-item"
+                            hx-target="#main"
+                            hx-target-error="#error"
+                            hx-get=(format!("/wines/{}/grapes", w.id))
+                            { "Grapes" } }
+                        li { a class="dropdown-item"
+                            hx-trigger="click"
+                            hx-target="#main"
+                            hx-target-error="#error"
+                            hx-get=(format!("/wines/{}/image", w.id)) class="dropdown-item"
+                            { "Upload Image" }}
+
+                        li { a class="dropdown-item"
+                            hx-target=(format!("#wine-{}", w.id))
+                            hx-swap="delete"
+                            hx-target-error="#error"
+                            hx-delete=(format!("/wines/{}", w.id))
+                            hx-confirm="Are you sure you wish to delete this wine?"
+                            { "Delete" }
+                        }
+                    }
+                }
+            }
+        }
+    })
+}
+
+pub(crate) async fn wine_table(
+    axum::extract::State(state): axum::extract::State<State>,
+) -> MDResult {
+    tracing::info!("wine_table");
+    let state = state.lock().await;
+    let wines = db::wines(&state.db).await?;
 
     Ok(maud::html! {
         (page_header("Wine Cellar"))
@@ -116,88 +200,9 @@ pub(crate) async fn wine_table(
                     th {}
                 }
             }
-            tbody {
-                @for w in disp_wines {
-                    tr id=(format!("wine-{}", w.id)) {
-                        td {
-                            @if let Some(tn) = &w.thumbnail {
-                                img src=(format!("data:image/png;base64, {tn}"));
-
-                            }
-                        }
-                        td {
-                            a href="#"
-                              class="link-primary"
-                              hx-trigger="click" hx-target="#main" hx-target-error="#error" hx-get=(format!("/wines/{}", w.id))
-                                { (w.name)}
-                        }
-                        td {(w.year)}
-                        td {(w.num_bottles)}
-                        td {
-                            @if let Some(comment) = w.last_comment {
-                                (comment)
-                            }
-                        }
-                        td {
-                            ul {
-                                @for grape in w.grapes {
-                                    li {
-                                        (grape)
-                                    }
-                                }
-                            }
-                        }
-                        td {
-                            div class="dropdown" {
-                                button class="btn btn-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown" aria-expanded="false" {
-                                    "Action"
-                                }
-                                ul class="dropdown-menu" {
-                                    li { a class="dropdown-item"
-                                        hx-target="#main"
-                                        hx-target-error="#error"
-                                        hx-get=(format!("/wines/{}/drink", w.id))
-                                        { "Drink" }
-                                    }
-
-                                    li { a class="dropdown-item"
-                                        hx-target="#main"
-                                        hx-target-error="#error"
-                                        hx-get=(format!("/wines/{}/buy", w.id))
-                                        { "Buy" }
-                                    }
-
-                                    li { a class="dropdown-item"
-                                        hx-target="#main"
-                                        hx-target-error="#error"
-                                        hx-get=(format!("/wines/{}/comment", w.id))
-                                        { "Comment" }
-                                    }
-
-                                    li { a class="dropdown-item"
-                                        hx-target="#main"
-                                        hx-target-error="#error"
-                                        hx-get=(format!("/wines/{}/grapes", w.id))
-                                        { "Grapes" } }
-                                    li { a class="dropdown-item"
-                                        hx-trigger="click"
-                                        hx-target="#main"
-                                        hx-target-error="#error"
-                                        hx-get=(format!("/wines/{}/image", w.id)) class="dropdown-item"
-                                        { "Upload Image" }}
-
-                                    li { a class="dropdown-item"
-                                        hx-target=(format!("#wine-{}", w.id))
-                                        hx-swap="delete"
-                                        hx-target-error="#error"
-                                        hx-delete=(format!("/wines/{}", w.id))
-                                        hx-confirm="Are you sure you wish to delete this wine?"
-                                        { "Delete" }
-                                    }
-                                }
-                            }
-                        }
-                    }
+            tbody id="wineTable" {
+                @for wine in wines {
+                    (wine_table_row(&state, wine).await?)
                 }
             }
         }

@@ -52,11 +52,16 @@ pub(crate) async fn wine_inventory_events(
     Ok(res)
 }
 
-pub(crate) async fn add_wine(db: &sqlx::SqlitePool, name: &str, year: i64) -> anyhow::Result<()> {
-    sqlx::query!("INSERT INTO wines (name, year) VALUES ($1, $2)", name, year)
-        .execute(db)
-        .await?;
-    Ok(())
+pub(crate) async fn add_wine(db: &sqlx::SqlitePool, name: &str, year: i64) -> anyhow::Result<Wine> {
+    let wine = sqlx::query_as!(
+        Wine,
+        "INSERT INTO wines (name, year) VALUES ($1, $2) RETURNING *",
+        name,
+        year
+    )
+    .fetch_one(db)
+    .await?;
+    Ok(wine)
 }
 
 pub(crate) async fn delete_wine(db: &sqlx::SqlitePool, wine_id: i64) -> anyhow::Result<()> {
@@ -129,7 +134,6 @@ pub(crate) async fn set_wine_grapes(
 
     Ok(())
 }
-
 
 // Assumes b64 encoded image and thumbnail
 pub(crate) async fn set_wine_image(

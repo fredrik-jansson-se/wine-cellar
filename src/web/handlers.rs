@@ -16,11 +16,11 @@ pub(crate) async fn add_wine(
     axum::Form(wine): axum::Form<AddWine>,
 ) -> MDResult {
     tracing::info!("add_wine");
-    {
-        let state = state.lock().await;
-        db::add_wine(&state.db, &wine.name, wine.year).await?;
-    }
-    super::markup::wine_table(axum::extract::State(state)).await
+    let state = state.lock().await;
+    let wine = db::add_wine(&state.db, &wine.name, wine.year).await?;
+    tracing::info!("Added: {wine:?}");
+    super::markup::wine_table_row(&state, wine).await
+    // super::markup::wine_table(axum::extract::State(state)).await
 }
 
 #[tracing::instrument(skip(state))]
