@@ -23,10 +23,12 @@ pub(crate) async fn add_wine(
     super::markup::wine_table(axum::extract::State(state)).await
 }
 
+#[tracing::instrument(skip(state))]
 pub(crate) async fn delete_wine(
     axum::extract::State(state): axum::extract::State<State>,
     axum::extract::Path(wine_id): axum::extract::Path<i64>,
 ) -> MDResult {
+    tracing::info!("Delete");
     {
         let state = state.lock().await;
 

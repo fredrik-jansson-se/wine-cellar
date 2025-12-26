@@ -83,7 +83,7 @@ pub(crate) async fn wine_table(
             }
             tbody {
                 @for w in disp_wines {
-                    tr {
+                    tr id=(format!("wine-{}", w.id)) {
                         td {
                             @if let Some(tn) = &w.thumbnail {
                                 img src=(format!("data:image/png;base64, {tn}"));
@@ -152,7 +152,8 @@ pub(crate) async fn wine_table(
                                         { "Upload Image" }}
 
                                     li { a class="dropdown-item"
-                                        hx-target="#main"
+                                        hx-target=(format!("#wine-{}", w.id))
+                                        hx-swap="delete"
                                         hx-target-error="#error"
                                         hx-delete=(format!("/wines/{}", w.id))
                                         hx-confirm="Are you sure you wish to delete this wine?"
@@ -223,8 +224,18 @@ pub(crate) async fn edit_wine_grapes(
     let wine_grapes = db::get_wine_grapes(&state.db, wine_id).await?;
     let all_grapes = db::get_grapes(&state.db).await?;
     Ok(maud::html! {
-        form hx-post=(format!("/wines/{}/grapes", wine_id)) hx-swap="none" {
-            input type="submit" value="Set Grapes" class="btn btn-primary" {}
+        (page_header("Grapes"))
+        div id="error" {}
+        form hx-post=(format!("/wines/{}/grapes", wine_id))
+            hx-target="#main" 
+            hx-target-error="#error"
+            {
+            div class="mb-3" {
+                input type="submit" value="Set Grapes" class="btn btn-primary me-3" {}
+                button hx-trigger="click" hx-target="#main" hx-get="/" class="btn btn-secondary" {
+                    "Cancel"
+                }
+            }
             @for grape in all_grapes {
                 div class="form-check" {
                     input class="form-check-input" name="grapes" type="checkbox" value=(grape) id=(grape) checked[(wine_grapes.contains(&grape))]
@@ -253,8 +264,8 @@ pub(crate) async fn add_wine(
                 input name="year" id="year" class="form-control" type="number" {}
             }
             div class="mb-3" {
-                input type="submit" value="Add" class="btn btn-primary" {}
-                button hx-trigger="click" hx-target="#main" hx-get="/" class="btn btn-primary" {
+                input type="submit" value="Add" class="btn btn-primary me-3" {}
+                button hx-trigger="click" hx-target="#main" hx-get="/" class="btn btn-secondary" {
                     "Cancel"
                 }
             }
@@ -270,8 +281,8 @@ pub(crate) async fn add_comment(axum::extract::Path(wine_id): axum::extract::Pat
                 input name="comment" id="comment" class="form-control" {}
             }
             div class="mb-3" {
-                input type="submit" value="Add" class="btn btn-primary" {}
-                button hx-trigger="click" hx-target="#main" hx-get="/" class="btn btn-primary" {
+                input type="submit" value="Add" class="btn btn-primary me-3" {}
+                button hx-trigger="click" hx-target="#main" hx-get="/" class="btn btn-secondary" {
                     "Cancel"
                 }
             }
@@ -281,23 +292,25 @@ pub(crate) async fn add_comment(axum::extract::Path(wine_id): axum::extract::Pat
 
 pub(crate) async fn drink_wine(axum::extract::Path(wine_id): axum::extract::Path<i64>) -> Markup {
     tracing::info!("drink_wine");
+    let today = chrono::Local::now().date_naive();
     maud::html! {
+        (page_header("Drink Wine"))
         div id="error" {}
-        form id="drink-wine" 
-            hx-post=(format!("/wines/{wine_id}/drink")) 
-            hx-target="#main" 
+        form id="drink-wine"
+            hx-post=(format!("/wines/{wine_id}/drink"))
+            hx-target="#main"
             hx-target-error="#error" {
             div class="mb-3" {
                 label for="dt" class="form-label" { "Date" }
-                input name="dt" id="dt" type="date" class="form-control" {}
+                input name="dt" id="dt" type="date" class="form-control" value=(today) {}
             }
             div class="mb-3" {
                 label for="bottles" class="form-label" { "Bottles" }
                 input name="bottles" id="bottles" type="number" value="1" class="form-control" {}
             }
             div class="mb-3" {
-                input type="submit" value="Drink" class="btn btn-primary" {}
-                button hx-trigger="click" hx-target="#main" hx-get="/wines" class="btn btn-primary" {
+                input type="submit" value="Drink" class="btn btn-primary me-3" {}
+                button hx-trigger="click" hx-target="#main" hx-get="/wines" class="btn btn-secondary" {
                     "Cancel"
                 }
             }
@@ -306,22 +319,24 @@ pub(crate) async fn drink_wine(axum::extract::Path(wine_id): axum::extract::Path
 }
 pub(crate) async fn buy_wine(axum::extract::Path(wine_id): axum::extract::Path<i64>) -> Markup {
     tracing::info!("buy_wine");
+    let today = chrono::Local::now().date_naive();
     maud::html! {
+        (page_header("Buy Wine"))
         div id="error" {}
-        form id="buy-wine" hx-post=(format!("/wines/{wine_id}/buy")) 
+        form id="buy-wine" hx-post=(format!("/wines/{wine_id}/buy"))
             hx-target="#main"
             hx-target-error="#error" {
             div class="mb-3" {
                 label for="dt" class="form-label" { "Date" }
-                input name="dt" id="dt" type="date" class="form-control" {}
+                input name="dt" id="dt" type="date" class="form-control" value=(today) {}
             }
             div class="mb-3" {
                 label for="bottles" class="form-label" { "Bottles" }
-                input name="bottles" id="bottles" type="number" class="form-control" {}
+                input name="bottles" id="bottles" type="number" value="6" class="form-control" {}
             }
             div class="mb-3" {
-                input type="submit" value="Buy" class="btn btn-primary" {}
-                button hx-trigger="click" hx-target="#main" hx-get="/wines" class="btn btn-primary" {
+                input type="submit" value="Buy" class="btn btn-primary me-3" {}
+                button hx-trigger="click" hx-target="#main" hx-get="/wines" class="btn btn-secondary" {
                     "Cancel"
                 }
             }
@@ -335,7 +350,7 @@ pub(crate) async fn upload_wine_image(
     maud::html! {
         (page_header("Upload Image"))
         div id="error" {}
-        form hx-encoding="multipart/form-data" 
+        form hx-encoding="multipart/form-data"
             hx-target="#main"
             hx-target-error="#error"
             hx-post=(format!("/wines/{wine_id}/image")) {
