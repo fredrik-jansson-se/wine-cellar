@@ -95,7 +95,7 @@ pub(crate) async fn wine_table_row(
 
     Ok(maud::html! {
         tr id=(format!("wine-{}", w.id)) {
-            td {
+            td style="text-align: center" {
                 @if let Some(tn) = &w.thumbnail {
                     img src=(format!("data:image/png;base64, {tn}"));
 
@@ -191,13 +191,13 @@ pub(crate) async fn wine_table(
         table class="table table-striped" {
             thead {
                 tr {
-                    th {}
-                    th { "Name" }
-                    th { "Year" }
-                    th { "Bottles" }
-                    th { "Comment" }
-                    th { "Grapes" }
-                    th {}
+                    th scope="col" {}
+                    th scope="col" { "Name" }
+                    th scope="col" { "Year" }
+                    th scope="col" { "Bottles" }
+                    th scope="col" { "Comment" }
+                    th scope="col" { "Grapes" }
+                    th scope="col" {}
                 }
             }
             tbody id="wineTable" {
