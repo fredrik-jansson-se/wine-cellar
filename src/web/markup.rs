@@ -1,5 +1,6 @@
 use super::State;
 use crate::{db, web::MDResult};
+use chrono::Datelike;
 use maud::Markup;
 
 pub(crate) async fn index() -> Markup {
@@ -18,6 +19,7 @@ pub(crate) async fn index() -> Markup {
          div id="error" {}
          div hx-get="/wines" hx-trigger="load" hx-target="#main" hx-target-error="#error" {}
        }
+       (add_wine_modal())
        script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
          integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI"
          crossorigin="anonymous" {}
@@ -28,6 +30,39 @@ pub(crate) async fn index() -> Markup {
 fn page_header(header: &str) -> Markup {
     maud::html! {
         h1 class="display-1" {(header)}
+    }
+}
+
+fn add_wine_modal() -> Markup {
+    let this_year = chrono::Local::now().year();
+    maud::html! {
+        div class="modal" id="addWineModal" tabindex="-1" {
+            div class="modal-dialog" {
+                div class="modal-content" {
+                    div class="modal-header" {
+                        h5 class="modal-title" { "Add Wine" }
+                        button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" {}
+                    }
+                    form id="add-wine" 
+                        hx-post="/add-wine" hx-target="#main" hx-target-error="#error" {
+                        div class="modal-body" {
+                            div class="mb-3" {
+                                label for="name" class="form-label" { "Name" }
+                                input name="name" id="name" class="form-control" {}
+                            }
+                            div class="mb-3" {
+                                label for="year" class="form-label" { "Year" }
+                                input name="year" id="year" class="form-control" type="number" value=(this_year) {}
+                            }
+                        }
+                        div class="modal-footer" {
+                            button type="button" class="btn btn-secondary" data-bs-dismiss="modal" { "Close " }
+                            button type="submit" class="btn btn-primary" data-bs-dismiss="modal" { "Add Wine" }
+                        }
+                    }
+                }
+            }
+        }
     }
 }
 
@@ -67,7 +102,7 @@ pub(crate) async fn wine_table(
 
     Ok(maud::html! {
         (page_header("Wine Cellar"))
-        a href="#" hx-trigger="click" hx-target="#main" hx-get="/add-wine" { "Add Wine" }
+        a href="#" data-bs-toggle="modal" data-bs-target="#addWineModal" {"Add Wine"}
         div id="error" {}
         table class="table table-striped" {
             thead {
@@ -227,7 +262,7 @@ pub(crate) async fn edit_wine_grapes(
         (page_header("Grapes"))
         div id="error" {}
         form hx-post=(format!("/wines/{}/grapes", wine_id))
-            hx-target="#main" 
+            hx-target="#main"
             hx-target-error="#error"
             {
             div class="mb-3" {
@@ -240,33 +275,6 @@ pub(crate) async fn edit_wine_grapes(
                 div class="form-check" {
                     input class="form-check-input" name="grapes" type="checkbox" value=(grape) id=(grape) checked[(wine_grapes.contains(&grape))]
                     label class="form-check-label" for=(grape) { (grape) }
-                }
-            }
-        }
-    })
-}
-
-pub(crate) async fn add_wine(
-    axum::extract::State(_state): axum::extract::State<State>,
-) -> MDResult {
-    tracing::info!("Adding wine");
-    Ok(maud::html! {
-        (page_header("Add Wine"))
-        div id="error" {}
-        form id="add-wine"
-            hx-post="/add-wine" hx-target="#main" hx-target-error="#error" {
-            div class="mb-3" {
-                label for="name" class="form-label" { "Name" }
-                input name="name" id="name" class="form-control" {}
-            }
-            div class="mb-3" {
-                label for="year" class="form-label" { "Year" }
-                input name="year" id="year" class="form-control" type="number" {}
-            }
-            div class="mb-3" {
-                input type="submit" value="Add" class="btn btn-primary me-3" {}
-                button hx-trigger="click" hx-target="#main" hx-get="/" class="btn btn-secondary" {
-                    "Cancel"
                 }
             }
         }
