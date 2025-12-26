@@ -126,10 +126,11 @@ pub(crate) async fn drink_wine(
     super::markup::wine_table(axum::extract::State(state)).await
 }
 
-fn convert_and_thumbnail(image_data: &[u8]) -> anyhow::Result<(String, String)> {
+fn convert_and_thumbnail(image_data: &[u8], is_iphone: bool) -> anyhow::Result<(String, String)> {
     let reader = image::ImageReader::new(std::io::Cursor::new(image_data)).with_guessed_format()?;
 
     let image = reader.decode()?;
+    let image = if is_iphone { image.rotate90() } else { image };
     let thumbnail = image.thumbnail(160, 160);
     let image = image.resize(512, 512, image::imageops::Gaussian);
 
@@ -147,10 +148,13 @@ fn convert_and_thumbnail(image_data: &[u8]) -> anyhow::Result<(String, String)> 
     Ok((img_64, tn_u64))
 }
 
-#[tracing::instrument(skip(state))]
+#[tracing::instrument(skip(state, user_agent))]
 pub(crate) async fn set_wine_image(
     axum::extract::State(state): axum::extract::State<State>,
     axum::extract::Path(wine_id): axum::extract::Path<i64>,
+    axum_extra::extract::TypedHeader(user_agent): axum_extra::extract::TypedHeader<
+        headers::UserAgent,
+    >,
     mut mp: axum::extract::Multipart,
 ) -> MDResult {
     tracing::info!("new image");
@@ -160,8 +164,9 @@ pub(crate) async fn set_wine_image(
             let image_data = field.bytes().await?;
 
             tracing::info!("Got image with size: {}", image_data.len());
+            let is_iphone = user_agent.as_str().contains("iPhone");
             let (image, thumbnail) =
-                convert_and_thumbnail(&image_data).context("Image conversion")?;
+                convert_and_thumbnail(&image_data, is_iphone).context("Image conversion")?;
             let state = state.lock().await;
             db::set_wine_image(&state.db, wine_id, &image, &thumbnail).await?;
         }
