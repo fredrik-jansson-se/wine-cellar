@@ -1,0 +1,44 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO wines (name, year) VALUES ($1, $2) RETURNING *",
+  "describe": {
+    "columns": [
+      {
+        "name": "id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "year",
+        "ordinal": 2,
+        "type_info": "Integer"
+      },
+      {
+        "name": "image_b64",
+        "ordinal": 3,
+        "type_info": "Text"
+      },
+      {
+        "name": "image_thumbnail_b64",
+        "ordinal": 4,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "62467546ecb3f475c0c1b2e7dea66750cdc89e0fb72e8f55f7d892e306f2e4d9"
+}
