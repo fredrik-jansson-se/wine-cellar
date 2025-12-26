@@ -1,6 +1,7 @@
 # Wine Cellar
 
 Used to keep track of wines. 
+![overview](img/overview.png)
 
 ## Docker
 Run the published version on GitHub.
