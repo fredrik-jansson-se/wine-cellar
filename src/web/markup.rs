@@ -94,7 +94,7 @@ pub(crate) async fn wine_table_row(
     Ok(maud::html! {
         tr id=(format!("wine-{}", w.id)) {
             td style="text-align: center" {
-                img src=(format!("/wines/{}/image", w.id));
+                img src=(format!("/wines/{}/image", w.id)) height="160";
             }
             td {
                 a href="#"
