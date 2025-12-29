@@ -2,12 +2,11 @@ use std::str::FromStr;
 
 use anyhow::Context;
 
-#[derive(sqlx::FromRow, Debug)]
+#[derive(Debug)]
 pub(crate) struct Wine {
     pub wine_id: i64,
     pub name: String,
     pub year: i64,
-    pub image: Option<Vec<u8>>,
 }
 
 #[derive(sqlx::FromRow, Debug)]
@@ -30,9 +29,18 @@ pub(crate) async fn connect() -> anyhow::Result<sqlx::SqlitePool> {
 }
 
 pub(crate) async fn wines(db: &sqlx::SqlitePool) -> anyhow::Result<Vec<Wine>> {
-    let res = sqlx::query_as!(Wine, "SELECT * from wines")
+    let res = sqlx::query!("SELECT wine_id, name, year from wines")
         .fetch_all(db)
-        .await?;
+        .await?
+        .into_iter()
+        // Not sure why we need this conversation here, but not below where we fetch a single
+        // wine
+        .map(|r| Wine {
+            wine_id: r.wine_id.expect("Will always have id"),
+            name: r.name,
+            year: r.year,
+        })
+        .collect();
     Ok(res)
 }
 
@@ -54,7 +62,7 @@ pub(crate) async fn wine_inventory_events(
 pub(crate) async fn add_wine(db: &sqlx::SqlitePool, name: &str, year: i64) -> anyhow::Result<Wine> {
     let wine = sqlx::query_as!(
         Wine,
-        "INSERT INTO wines (name, year) VALUES ($1, $2) RETURNING *",
+        "INSERT INTO wines (name, year) VALUES ($1, $2) RETURNING wine_id,name,year",
         name,
         year
     )
@@ -85,9 +93,13 @@ pub(crate) async fn delete_wine(db: &sqlx::SqlitePool, wine_id: i64) -> anyhow::
 }
 
 pub(crate) async fn get_wine(db: &sqlx::SqlitePool, id: i64) -> anyhow::Result<Wine> {
-    let res = sqlx::query_as!(Wine, "SELECT * from wines WHERE wine_id=$1", id)
-        .fetch_one(db)
-        .await?;
+    let res = sqlx::query_as!(
+        Wine,
+        "SELECT wine_id,name,year from wines WHERE wine_id=$1",
+        id
+    )
+    .fetch_one(db)
+    .await?;
     Ok(res)
 }
 
@@ -221,7 +233,7 @@ pub(crate) async fn wine_image(
     wine_id: i64,
 ) -> anyhow::Result<Option<Vec<u8>>> {
     let res = sqlx::query_scalar!("SELECT image FROM wines WHERE wine_id=$1", wine_id)
-        .fetch_one(db).await?;
+        .fetch_one(db)
+        .await?;
     Ok(res)
 }
-
