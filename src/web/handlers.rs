@@ -101,24 +101,24 @@ pub(crate) async fn buy_wine(
 }
 
 #[derive(serde::Deserialize, Debug)]
-pub(crate) struct DrinkWine {
+pub(crate) struct ConsumeWine {
     dt: String,
     bottles: i64,
 }
 
 #[tracing::instrument(skip(state))]
-pub(crate) async fn drink_wine(
+pub(crate) async fn consume_wine(
     axum::extract::State(state): axum::extract::State<State>,
     axum::extract::Path(wine_id): axum::extract::Path<i64>,
-    axum::extract::Form(event): axum::extract::Form<DrinkWine>,
+    axum::extract::Form(event): axum::extract::Form<ConsumeWine>,
 ) -> MDResult {
-    tracing::info!("drink wine");
+    tracing::info!("consume wine");
     {
         let state = state.lock().await;
         let date = chrono::NaiveDate::parse_from_str(&event.dt, "%Y-%m-%d")?;
         let dt = chrono::NaiveDateTime::new(date, chrono::Local::now().naive_local().time());
 
-        // Drinking is negative bottles
+        // Consuming is negative bottles
         let bottles = -event.bottles;
         db::add_wine_event(&state.db, wine_id, bottles, dt).await?;
     }

@@ -127,8 +127,8 @@ pub(crate) async fn wine_table_row(
                         li { a class="dropdown-item"
                             hx-target="#main"
                             hx-target-error="#error"
-                            hx-get=(format!("/wines/{}/drink", w.id))
-                            { "Drink" }
+                            hx-get=(format!("/wines/{}/consume", w.id))
+                            { "Consume" }
                         }
 
                         li { a class="dropdown-item"
@@ -296,14 +296,14 @@ pub(crate) async fn add_comment(axum::extract::Path(wine_id): axum::extract::Pat
     }
 }
 
-pub(crate) async fn drink_wine(axum::extract::Path(wine_id): axum::extract::Path<i64>) -> Markup {
-    tracing::info!("drink_wine");
+pub(crate) async fn consume_wine(axum::extract::Path(wine_id): axum::extract::Path<i64>) -> Markup {
+    tracing::info!("consume_wine");
     let today = chrono::Local::now().date_naive();
     maud::html! {
-        (page_header("Drink Wine"))
+        (page_header("Consume Wine"))
         div id="error" {}
-        form id="drink-wine"
-            hx-post=(format!("/wines/{wine_id}/drink"))
+        form id="consume-wine"
+            hx-post=(format!("/wines/{wine_id}/consume"))
             hx-target="#main"
             hx-target-error="#error" {
             div class="mb-3" {
@@ -315,7 +315,7 @@ pub(crate) async fn drink_wine(axum::extract::Path(wine_id): axum::extract::Path
                 input name="bottles" id="bottles" type="number" value="1" class="form-control" {}
             }
             div class="mb-3" {
-                input type="submit" value="Drink" class="btn btn-primary me-3" {}
+                input type="submit" value="Consume" class="btn btn-primary me-3" {}
                 button hx-trigger="click" hx-target="#main" hx-get="/wines" class="btn btn-secondary" {
                     "Cancel"
                 }
