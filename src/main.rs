@@ -7,6 +7,7 @@ async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt::init();
     let db_pool = db::connect().await?;
 
+    tracing::info!("Migrate DB");
     sqlx::migrate!().run(&db_pool).await?;
 
     tokio::spawn(async move {

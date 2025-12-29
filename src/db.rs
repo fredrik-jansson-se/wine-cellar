@@ -4,11 +4,10 @@ use anyhow::Context;
 
 #[derive(sqlx::FromRow, Debug)]
 pub(crate) struct Wine {
-    pub id: i64,
+    pub wine_id: i64,
     pub name: String,
     pub year: i64,
-    pub image_b64: Option<String>,
-    pub image_thumbnail_b64: Option<String>,
+    pub image: Option<Vec<u8>>,
 }
 
 #[derive(sqlx::FromRow, Debug)]
@@ -78,7 +77,7 @@ pub(crate) async fn delete_wine(db: &sqlx::SqlitePool, wine_id: i64) -> anyhow::
     )
     .execute(&mut *trans)
     .await?;
-    sqlx::query!("DELETE FROM wines WHERE id=$1", wine_id)
+    sqlx::query!("DELETE FROM wines WHERE wine_id=$1", wine_id)
         .execute(&mut *trans)
         .await?;
     trans.commit().await?;
@@ -86,7 +85,7 @@ pub(crate) async fn delete_wine(db: &sqlx::SqlitePool, wine_id: i64) -> anyhow::
 }
 
 pub(crate) async fn get_wine(db: &sqlx::SqlitePool, id: i64) -> anyhow::Result<Wine> {
-    let res = sqlx::query_as!(Wine, "SELECT * from wines WHERE id=$1", id)
+    let res = sqlx::query_as!(Wine, "SELECT * from wines WHERE wine_id=$1", id)
         .fetch_one(db)
         .await?;
     Ok(res)
@@ -139,17 +138,11 @@ pub(crate) async fn set_wine_grapes(
 pub(crate) async fn set_wine_image(
     db: &sqlx::SqlitePool,
     wine_id: i64,
-    image: &str,
-    thumbnail: &str,
+    image: &[u8],
 ) -> anyhow::Result<()> {
-    sqlx::query!(
-        "UPDATE wines SET image_b64=$2, image_thumbnail_b64=$3 WHERE id=$1",
-        wine_id,
-        image,
-        thumbnail
-    )
-    .execute(db)
-    .await?;
+    sqlx::query!("UPDATE wines SET image=$2 WHERE wine_id=$1", wine_id, image,)
+        .execute(db)
+        .await?;
     Ok(())
 }
 
@@ -222,3 +215,13 @@ pub(crate) async fn add_wine_event(
     .await?;
     Ok(())
 }
+
+pub(crate) async fn wine_image(
+    db: &sqlx::SqlitePool,
+    wine_id: i64,
+) -> anyhow::Result<Option<Vec<u8>>> {
+    let res = sqlx::query_scalar!("SELECT image FROM wines WHERE wine_id=$1", wine_id)
+        .fetch_one(db).await?;
+    Ok(res)
+}
+

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE wines SET image=$2 WHERE wine_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": []
+  },
+  "hash": "0001449dab30f879a9351a941e4ae13173fa135c72b09fbd2677b6c458895d7b"
+}

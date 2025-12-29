@@ -76,30 +76,25 @@ pub(crate) async fn wine_table_row(
         year: i64,
         num_bottles: i64,
         last_comment: Option<String>,
-        thumbnail: Option<String>,
         grapes: Vec<String>,
     }
-    let inv_events = db::wine_inventory_events(&state.db, wine.id).await?;
+    let inv_events = db::wine_inventory_events(&state.db, wine.wine_id).await?;
     let inventory: i64 = inv_events.iter().map(|ie| ie.bottles).sum();
-    let wine_grapes = db::get_wine_grapes(&state.db, wine.id).await?;
-    let last_comment = db::last_wine_comment(&state.db, wine.id).await?;
+    let wine_grapes = db::get_wine_grapes(&state.db, wine.wine_id).await?;
+    let last_comment = db::last_wine_comment(&state.db, wine.wine_id).await?;
     let w = MainWine {
-        id: wine.id,
+        id: wine.wine_id,
         name: wine.name,
         year: wine.year,
         num_bottles: inventory,
         last_comment: last_comment.map(|c| c.comment),
-        thumbnail: wine.image_thumbnail_b64,
         grapes: wine_grapes,
     };
 
     Ok(maud::html! {
         tr id=(format!("wine-{}", w.id)) {
             td style="text-align: center" {
-                @if let Some(tn) = &w.thumbnail {
-                    img src=(format!("data:image/png;base64, {tn}"));
-
-                }
+                img src=(format!("/wines/{}/image", w.id));
             }
             td {
                 a href="#"
@@ -248,9 +243,7 @@ pub(crate) async fn wine_information(
                 }
             }
             div class="col" {
-                @if let Some(image) = &wine.image_b64 {
-                    img src=(format!("data:image/png;base64, {image}"));
-                }
+                img src=(format!("/wines/{wine_id}/image"));
             }
         }
     })

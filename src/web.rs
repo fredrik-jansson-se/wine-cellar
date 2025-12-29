@@ -43,9 +43,11 @@ pub async fn run(db: sqlx::SqlitePool) -> anyhow::Result<()> {
         .route("/add-wine", axum::routing::post(handlers::add_wine))
         .route("/", axum::routing::get(markup::index))
         .route(
-            "/wines/{wine_id}/image",
+            "/wines/{wine_id}/upload_image",
             axum::routing::get(markup::upload_wine_image),
         )
+        .route("/wines/{wine_id}/image",
+            axum::routing::get(handlers::wine_image))
         .route(
             "/wines/{wine_id}/image",
             axum::routing::post(handlers::set_wine_image)

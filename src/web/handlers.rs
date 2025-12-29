@@ -1,8 +1,7 @@
 use super::{MDResult, State};
 use anyhow::Context;
-use base64::Engine;
 
-use crate::db;
+use crate::{db, web::AppError};
 
 #[derive(serde::Deserialize, Debug)]
 pub(crate) struct AddWine {
@@ -126,7 +125,7 @@ pub(crate) async fn drink_wine(
     super::markup::wine_table(axum::extract::State(state)).await
 }
 
-fn convert_and_thumbnail(image_data: &[u8], is_iphone: bool) -> anyhow::Result<(String, String)> {
+fn convert_and_thumbnail(image_data: &[u8], is_iphone: bool) -> anyhow::Result<(Vec<u8>, Vec<u8>)> {
     let reader = image::ImageReader::new(std::io::Cursor::new(image_data)).with_guessed_format()?;
 
     let image = reader.decode()?;
@@ -142,10 +141,10 @@ fn convert_and_thumbnail(image_data: &[u8], is_iphone: bool) -> anyhow::Result<(
     let mut cursor = std::io::Cursor::new(&mut thumbnail_encoded);
     thumbnail.write_to(&mut cursor, image::ImageFormat::Png)?;
 
-    let img_64 = base64::prelude::BASE64_STANDARD_NO_PAD.encode(&image_encoded);
-    let tn_u64 = base64::prelude::BASE64_STANDARD_NO_PAD.encode(&thumbnail_encoded);
+    // let img_64 = base64::prelude::BASE64_STANDARD_NO_PAD.encode(&image_encoded);
+    // let tn_u64 = base64::prelude::BASE64_STANDARD_NO_PAD.encode(&thumbnail_encoded);
 
-    Ok((img_64, tn_u64))
+    Ok((image_encoded, thumbnail_encoded))
 }
 
 #[tracing::instrument(skip(state, user_agent))]
@@ -165,11 +164,22 @@ pub(crate) async fn set_wine_image(
 
             tracing::info!("Got image with size: {}", image_data.len());
             let is_iphone = user_agent.as_str().contains("iPhone");
-            let (image, thumbnail) =
+            let (image, _thumbnail) =
                 convert_and_thumbnail(&image_data, is_iphone).context("Image conversion")?;
             let state = state.lock().await;
-            db::set_wine_image(&state.db, wine_id, &image, &thumbnail).await?;
+            db::set_wine_image(&state.db, wine_id, &image).await?;
         }
     }
     super::markup::wine_table(axum::extract::State(state)).await
+}
+
+#[tracing::instrument(skip(state))]
+pub(crate) async fn wine_image(
+    axum::extract::State(state): axum::extract::State<State>,
+    axum::extract::Path(wine_id): axum::extract::Path<i64>,
+) -> std::result::Result<Vec<u8>, AppError> {
+    let state = state.lock().await;
+    Ok(db::wine_image(&state.db, wine_id)
+        .await?
+        .unwrap_or_default())
 }

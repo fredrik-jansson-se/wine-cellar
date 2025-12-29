@@ -2919,7 +2919,6 @@ dependencies = [
  "axum",
  "axum-extra",
  "axum-htmx",
- "base64",
  "chrono",
  "dotenv",
  "headers",
