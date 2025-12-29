@@ -154,7 +154,7 @@ pub(crate) async fn wine_table_row(
                             hx-trigger="click"
                             hx-target="#main"
                             hx-target-error="#error"
-                            hx-get=(format!("/wines/{}/image", w.id)) class="dropdown-item"
+                            hx-get=(format!("/wines/{}/upload-image", w.id)) class="dropdown-item"
                             { "Upload Image" }}
 
                         li { a class="dropdown-item"
