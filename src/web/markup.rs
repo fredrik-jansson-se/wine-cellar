@@ -3,6 +3,8 @@ use crate::{db, web::MDResult};
 use chrono::Datelike;
 use maud::Markup;
 
+pub(crate) mod image;
+
 pub(crate) async fn index() -> Markup {
     use maud::DOCTYPE;
     maud::html! {
@@ -156,6 +158,13 @@ pub(crate) async fn wine_table_row(
                             hx-target-error="#error"
                             hx-get=(format!("/wines/{}/upload-image", w.id)) class="dropdown-item"
                             { "Upload Image" }}
+
+                        li { a class="dropdown-item"
+                            hx-trigger="click"
+                            hx-target="#main"
+                            hx-target-error="#error"
+                            hx-get=(format!("/wines/{}/edit-image", w.id)) class="dropdown-item"
+                            { "Edit Image" }}
 
                         li { a class="dropdown-item"
                             hx-target=(format!("#wine-{}", w.id))

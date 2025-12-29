@@ -146,7 +146,6 @@ pub(crate) async fn set_wine_grapes(
     Ok(())
 }
 
-// Assumes b64 encoded image and thumbnail
 pub(crate) async fn set_wine_image(
     db: &sqlx::SqlitePool,
     wine_id: i64,
