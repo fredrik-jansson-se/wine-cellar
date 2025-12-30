@@ -48,6 +48,10 @@ pub async fn run(db: sqlx::SqlitePool) -> anyhow::Result<()> {
         )
         .route("/wines/{wine_id}/image",
             axum::routing::get(handlers::wine_image))
+        .route("/wines/{wine_id}/edit-image",
+            axum::routing::get(markup::image::edit_image))
+        .route("/wines/{wine_id}/edit-image",
+            axum::routing::post(handlers::edit_image))
         .route(
             "/wines/{wine_id}/image",
             axum::routing::post(handlers::set_wine_image)
@@ -95,6 +99,7 @@ pub async fn run(db: sqlx::SqlitePool) -> anyhow::Result<()> {
         .with_state(state);
 
     let lap = std::env::var("WINE_LAP").unwrap_or("0.0.0.0:20000".to_owned());
+    tracing::info!("Listening: {lap}");
     let listener = tokio::net::TcpListener::bind(lap).await?;
     tracing::info!("Starting web server");
     axum::serve(listener, router.into_make_service()).await?;

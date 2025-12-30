@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT * from wines WHERE wine_id=$1",
+  "query": "SELECT wine_id, name, year from wines",
   "describe": {
     "columns": [
       {
@@ -17,22 +17,16 @@
         "name": "year",
         "ordinal": 2,
         "type_info": "Integer"
-      },
-      {
-        "name": "image",
-        "ordinal": 3,
-        "type_info": "Blob"
       }
     ],
     "parameters": {
-      "Right": 1
+      "Right": 0
     },
     "nullable": [
+      true,
       false,
-      false,
-      false,
-      true
+      false
     ]
   },
-  "hash": "8bfcd4fd8c920b9a122b6a32561d796c9cafe7a64732b5f02e774005e78ec4ae"
+  "hash": "5095791a4713af50a2ad96b1e4ae2bd1720e36e06184254305dc5807d14f24fd"
 }
