@@ -31,32 +31,31 @@ pub(crate) async fn edit_image(
         style {
             (maud::PreEscaped(STYLE))
         }
-    div class="img-select-wrap" id="imgWrap" {
-      img id="targetImg"
-          src=(format!("/wines/{wine_id}/image"))
-          alt="Select region"
-          draggable="false";
-      div id="rect" class="selection-rect" {}
-    }
+        div class="img-select-wrap" id="imgWrap" {
+            img id="targetImg"
+                src=(format!("/wines/{wine_id}/image"))
+                alt="Select region"
+                draggable="false";
+            div id="rect" class="selection-rect" {}
+        }
 
-    form id="roiForm"
-      hx-post="/roi"
-      hx-target="#roiResult"
-      hx-swap="innerHTML" {
-      input type="hidden" name="x" id="roiX";
-      input type="hidden" name="y" id="roiY";
-      input type="hidden" name="w" id="roiW";
-      input type="hidden" name="h" id="roiH";
-      input type="hidden" name="imageId" value="example.jpg";
+        form id="roiForm"
+            hx-post=(format!("/wines/{wine_id}/edit-image"))
+            hx-target="#main" {
+                input type="hidden" name="x" id="roiX";
+                input type="hidden" name="y" id="roiY";
+                input type="hidden" name="w" id="roiW";
+                input type="hidden" name="h" id="roiH";
+                input type="hidden" name="imageId" value="example.jpg";
 
-      div class="roi-actions" {
-          button type="submit" id="submitRoi" class="btn btn-primary" disabled {"Submit"}
-          button type="button" id="clearRoi" class="btn btn-secondary" disabled {"Clear"}
-          span class="roi-hint" id="roiHint"{"Drag on the image to select a region."}
-      }
-    }
+                div class="roi-actions" {
+                    button type="submit" id="submitRoi" class="btn btn-primary" disabled {"Submit"}
+                    button type="button" id="clearRoi" class="btn btn-secondary" disabled {"Clear"}
+                    span class="roi-hint" id="roiHint"{"Drag on the image to select a region."}
+                }
+            }
 
-    div id="roiResult" {}
-    script {(maud::PreEscaped(EDIT_IMG_JS))}
+        div id="roiResult" {}
+        script {(maud::PreEscaped(EDIT_IMG_JS))}
     })
 }

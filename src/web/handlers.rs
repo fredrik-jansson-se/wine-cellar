@@ -124,18 +124,25 @@ pub(crate) async fn consume_wine(
     super::markup::wine_table(axum::extract::State(state)).await
 }
 
-fn convert_image(image_data: &[u8], is_iphone: bool) -> anyhow::Result<Vec<u8>> {
+fn parse_image(image_data: &[u8]) -> anyhow::Result<image::DynamicImage> {
     let reader = image::ImageReader::new(std::io::Cursor::new(image_data)).with_guessed_format()?;
-
     let image = reader.decode()?;
-    let image = if is_iphone { image.rotate90() } else { image };
-    let image = image.resize(512, 512, image::imageops::Gaussian);
+    Ok(image)
+}
 
+fn png_encode_image(image: image::DynamicImage) -> anyhow::Result<Vec<u8>> {
     let mut image_encoded = Vec::new();
     let mut cursor = std::io::Cursor::new(&mut image_encoded);
     image.write_to(&mut cursor, image::ImageFormat::Png)?;
-
     Ok(image_encoded)
+}
+
+fn convert_image(image_data: &[u8], is_iphone: bool) -> anyhow::Result<Vec<u8>> {
+    let image = parse_image(image_data)?;
+    let image = if is_iphone { image.rotate90() } else { image };
+    let image = image.resize(512, 512, image::imageops::Gaussian);
+
+    png_encode_image(image)
 }
 
 #[tracing::instrument(skip(state, user_agent))]
@@ -160,6 +167,34 @@ pub(crate) async fn set_wine_image(
             db::set_wine_image(&state.db, wine_id, &image).await?;
         }
     }
+    super::markup::wine_table(axum::extract::State(state)).await
+}
+
+#[derive(Debug, serde::Deserialize)]
+pub struct EditImage {
+    x: u32,
+    y: u32,
+    w: u32,
+    h: u32,
+}
+
+#[tracing::instrument(skip(state))]
+pub(crate) async fn edit_image(
+    axum::extract::State(state): axum::extract::State<State>,
+    axum::extract::Path(wine_id): axum::extract::Path<i64>,
+    axum::Form(edit_image): axum::Form<EditImage>,
+) -> MDResult {
+    tracing::info!("edit_image");
+    {
+        let state = state.lock().await;
+        let image_data = db::wine_image(&state.db, wine_id).await?
+            .ok_or(anyhow::anyhow!("No image data"))?;
+        let image = parse_image(&image_data)?;
+        let image = image.crop_imm(edit_image.x, edit_image.y, edit_image.w, edit_image.h);
+        let image_data = png_encode_image(image)?;
+        db::set_wine_image(&state.db, wine_id, &image_data).await?;
+    }
+
     super::markup::wine_table(axum::extract::State(state)).await
 }
 
