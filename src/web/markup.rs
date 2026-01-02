@@ -79,6 +79,7 @@ pub(crate) async fn wine_table_row(
         num_bottles: i64,
         last_comment: Option<String>,
         grapes: Vec<String>,
+        has_image: bool,
     }
     let inv_events = db::wine_inventory_events(&state.db, wine.wine_id).await?;
     let inventory: i64 = inv_events.iter().map(|ie| ie.bottles).sum();
@@ -91,12 +92,15 @@ pub(crate) async fn wine_table_row(
         num_bottles: inventory,
         last_comment: last_comment.map(|c| c.comment),
         grapes: wine_grapes,
+        has_image: wine.has_image,
     };
 
     Ok(maud::html! {
         tr id=(format!("wine-{}", w.id)) {
             td style="text-align: center" {
-                img src=(format!("/wines/{}/image", w.id)) height="160";
+                @if w.has_image {
+                    img src=(format!("/wines/{}/image", w.id)) height="160";
+                }
             }
             td {
                 a href="#"

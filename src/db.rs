@@ -7,6 +7,7 @@ pub(crate) struct Wine {
     pub wine_id: i64,
     pub name: String,
     pub year: i64,
+    pub has_image: bool,
 }
 
 #[derive(sqlx::FromRow, Debug)]
@@ -29,19 +30,35 @@ pub(crate) async fn connect() -> anyhow::Result<sqlx::SqlitePool> {
 }
 
 pub(crate) async fn wines(db: &sqlx::SqlitePool) -> anyhow::Result<Vec<Wine>> {
-    let res = sqlx::query!("SELECT wine_id, name, year from wines")
+    let res = sqlx::query!("SELECT wine_id, name, year, image IS NOT NULL AS has_image from wines")
         .fetch_all(db)
         .await?
         .into_iter()
         // Not sure why we need this conversation here, but not below where we fetch a single
         // wine
         .map(|r| Wine {
-            wine_id: r.wine_id.expect("Will always have id"),
+            wine_id: r.wine_id, //.wine_id.expect("Will always have id"),
             name: r.name,
             year: r.year,
+            has_image: r.has_image != 0,
         })
         .collect();
     Ok(res)
+}
+
+pub(crate) async fn get_wine(db: &sqlx::SqlitePool, id: i64) -> anyhow::Result<Wine> {
+    let res = sqlx::query!(
+        "SELECT wine_id, name, year, image IS NOT NULL AS has_image from wines WHERE wine_id=$1",
+        id
+    )
+    .fetch_one(db)
+    .await?;
+    Ok(Wine {
+        wine_id: res.wine_id,
+        name: res.name,
+        year: res.year,
+        has_image: res.has_image != 0,
+    })
 }
 
 pub(crate) async fn wine_inventory_events(
@@ -60,15 +77,14 @@ pub(crate) async fn wine_inventory_events(
 }
 
 pub(crate) async fn add_wine(db: &sqlx::SqlitePool, name: &str, year: i64) -> anyhow::Result<Wine> {
-    let wine = sqlx::query_as!(
-        Wine,
-        "INSERT INTO wines (name, year) VALUES ($1, $2) RETURNING wine_id,name,year",
+    let wine_id = sqlx::query_scalar!(
+        "INSERT INTO wines (name, year) VALUES ($1, $2) RETURNING wine_id",
         name,
         year
     )
     .fetch_one(db)
     .await?;
-    Ok(wine)
+    get_wine(db, wine_id).await
 }
 
 pub(crate) async fn delete_wine(db: &sqlx::SqlitePool, wine_id: i64) -> anyhow::Result<()> {
@@ -90,17 +106,6 @@ pub(crate) async fn delete_wine(db: &sqlx::SqlitePool, wine_id: i64) -> anyhow::
         .await?;
     trans.commit().await?;
     Ok(())
-}
-
-pub(crate) async fn get_wine(db: &sqlx::SqlitePool, id: i64) -> anyhow::Result<Wine> {
-    let res = sqlx::query_as!(
-        Wine,
-        "SELECT wine_id,name,year from wines WHERE wine_id=$1",
-        id
-    )
-    .fetch_one(db)
-    .await?;
-    Ok(res)
 }
 
 pub(crate) async fn get_grapes(db: &sqlx::SqlitePool) -> anyhow::Result<Vec<String>> {

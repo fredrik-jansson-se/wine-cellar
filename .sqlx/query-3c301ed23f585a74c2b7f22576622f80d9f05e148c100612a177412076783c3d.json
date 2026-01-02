@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT wine_id,name,year from wines WHERE wine_id=$1",
+  "query": "SELECT wine_id, name, year, image IS NOT NULL AS has_image from wines WHERE wine_id=$1",
   "describe": {
     "columns": [
       {
@@ -17,6 +17,11 @@
         "name": "year",
         "ordinal": 2,
         "type_info": "Integer"
+      },
+      {
+        "name": "has_image",
+        "ordinal": 3,
+        "type_info": "Integer"
       }
     ],
     "parameters": {
@@ -25,8 +30,9 @@
     "nullable": [
       false,
       false,
+      false,
       false
     ]
   },
-  "hash": "d0c4d92c5311bac32645f1d0dc0c6f06e3a5488a2c8d491578542f08cd6e72b9"
+  "hash": "3c301ed23f585a74c2b7f22576622f80d9f05e148c100612a177412076783c3d"
 }

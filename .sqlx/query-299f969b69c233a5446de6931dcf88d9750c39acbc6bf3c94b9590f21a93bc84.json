@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "INSERT INTO wines (name, year) VALUES ($1, $2) RETURNING wine_id",
+  "describe": {
+    "columns": [
+      {
+        "name": "wine_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 2
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "299f969b69c233a5446de6931dcf88d9750c39acbc6bf3c94b9590f21a93bc84"
+}
