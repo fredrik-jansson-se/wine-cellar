@@ -46,7 +46,6 @@ pub(crate) async fn edit_image(
                 input type="hidden" name="y" id="roiY";
                 input type="hidden" name="w" id="roiW";
                 input type="hidden" name="h" id="roiH";
-                input type="hidden" name="imageId" value="example.jpg";
 
                 div class="roi-actions" {
                     button type="submit" id="submitRoi" class="btn btn-primary" disabled {"Submit"}

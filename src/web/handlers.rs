@@ -34,20 +34,9 @@ pub(crate) async fn delete_wine(
 pub(crate) async fn post_wine_grapes(
     axum::extract::State(state): axum::extract::State<State>,
     axum::extract::Path(wine_id): axum::extract::Path<i64>,
-    axum::extract::RawForm(form): axum::extract::RawForm,
+    axum::extract::Form(form): axum::extract::Form<std::collections::HashMap<String, String>>,
 ) -> MDResult {
-    // form is b"grapes=Barbera&grapes=Gamay"
-    let data = percent_encoding::percent_decode(&form).decode_utf8()?;
-
-    tracing::info!("Data: {data}");
-    let mut grapes = Vec::new();
-    for grape in data.split("&") {
-        let item = grape.split("=").nth(1);
-        if let Some(i) = item {
-            grapes.push(i);
-        }
-    }
-
+    let grapes:Vec<_> = form.values().map(|v| v.as_ref()).collect();
     db::set_wine_grapes(&state.db, wine_id, &grapes).await?;
     super::markup::wine_table(axum::extract::State(state)).await
 }
@@ -224,8 +213,12 @@ pub(crate) async fn edit_image(
 pub(crate) async fn wine_image(
     axum::extract::State(state): axum::extract::State<State>,
     axum::extract::Path(wine_id): axum::extract::Path<i64>,
-) -> std::result::Result<Vec<u8>, AppError> {
-    Ok(db::wine_image(&state.db, wine_id)
-        .await?
-        .unwrap_or_default())
+) -> std::result::Result<(axum::http::StatusCode, Vec<u8>), AppError> {
+    let img = db::wine_image(&state.db, wine_id)
+        .await?;
+    if let Some(img) = img {
+        Ok((axum::http::StatusCode::OK, img))
+    } else {
+        Ok((axum::http::StatusCode::NOT_FOUND, Vec::new()))
+    }
 }

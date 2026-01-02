@@ -99,7 +99,7 @@ pub(crate) async fn wine_table_row(
         tr id=(format!("wine-{}", w.id)) {
             td style="text-align: center" {
                 @if w.has_image {
-                    img src=(format!("/wines/{}/image", w.id)) height="160";
+                    img src=(format!("/wines/{}/image", w.id)) height="80";
                 }
             }
             td {
@@ -282,7 +282,7 @@ pub(crate) async fn edit_wine_grapes(
             @for grape in all_grapes {
                 @let id=format!("grape-{}", grape.rowid);
                 div class="form-check" {
-                    input class="form-check-input" name="grapes" type="checkbox" value=(grape.name) id=(id) checked[(wine_grapes.contains(&grape.name))];
+                    input class="form-check-input" name=(id) type="checkbox" value=(grape.name) id=(id) checked[(wine_grapes.contains(&grape.name))];
                     label class="form-check-label" for=(id) { (grape.name) };
                 }
             }
