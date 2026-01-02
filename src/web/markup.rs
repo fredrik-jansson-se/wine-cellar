@@ -241,7 +241,7 @@ pub(crate) async fn wine_information(
                   tbody {
                     @for evt in events {
                         tr {
-                            td {(evt.dt)}
+                            td {(evt.dt.date())}
                             td {(evt.bottles)}
                         }
                     }
