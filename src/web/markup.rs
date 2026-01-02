@@ -280,9 +280,10 @@ pub(crate) async fn edit_wine_grapes(
                 }
             }
             @for grape in all_grapes {
+                @let id=format!("grape-{}", grape.rowid);
                 div class="form-check" {
-                    input class="form-check-input" name="grapes" type="checkbox" value=(grape) id=(grape) checked[(wine_grapes.contains(&grape))]
-                    label class="form-check-label" for=(grape) { (grape) }
+                    input class="form-check-input" name="grapes" type="checkbox" value=(grape.name) id=(id) checked[(wine_grapes.contains(&grape.name))];
+                    label class="form-check-label" for=(id) { (grape.name) };
                 }
             }
         }

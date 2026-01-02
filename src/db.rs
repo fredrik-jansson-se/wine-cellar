@@ -108,10 +108,21 @@ pub(crate) async fn delete_wine(db: &sqlx::SqlitePool, wine_id: i64) -> anyhow::
     Ok(())
 }
 
-pub(crate) async fn get_grapes(db: &sqlx::SqlitePool) -> anyhow::Result<Vec<String>> {
-    let res = sqlx::query_scalar!("SELECT name FROM grapes ORDER BY name")
+pub(crate) struct Grape {
+    pub rowid: i64,
+    pub name: String,
+}
+pub(crate) async fn get_grapes(db: &sqlx::SqlitePool) -> anyhow::Result<Vec<Grape>> {
+    let res = sqlx::query!("SELECT rowid, name FROM grapes ORDER BY name")
         .fetch_all(db)
-        .await?;
+        .await?
+        .into_iter()
+        .map(|r| Grape {
+            // This table always has a rowid
+            rowid: r.rowid.unwrap(),
+            name: r.name,
+        })
+        .collect();
     Ok(res)
 }
 
