@@ -15,7 +15,6 @@ pub(crate) async fn add_wine(
     axum::Form(wine): axum::Form<AddWine>,
 ) -> MDResult {
     tracing::info!("add_wine");
-    let state = state.lock().await;
     let wine = db::add_wine(&state.db, &wine.name, wine.year).await?;
     tracing::info!("Added: {wine:?}");
     super::markup::wine_table_row(&state, wine).await
@@ -27,11 +26,7 @@ pub(crate) async fn delete_wine(
     axum::extract::Path(wine_id): axum::extract::Path<i64>,
 ) -> MDResult {
     tracing::info!("Delete");
-    {
-        let state = state.lock().await;
-
-        db::delete_wine(&state.db, wine_id).await?;
-    }
+    db::delete_wine(&state.db, wine_id).await?;
     super::markup::wine_table(axum::extract::State(state)).await
 }
 
@@ -52,10 +47,7 @@ pub(crate) async fn post_wine_grapes(
         }
     }
 
-    {
-        let state = state.lock().await;
-        db::set_wine_grapes(&state.db, wine_id, &grapes).await?;
-    }
+    db::set_wine_grapes(&state.db, wine_id, &grapes).await?;
     super::markup::wine_table(axum::extract::State(state)).await
 }
 
@@ -69,11 +61,8 @@ pub(crate) async fn add_comment(
     axum::extract::Path(wine_id): axum::extract::Path<i64>,
     axum::extract::Form(comment): axum::extract::Form<AddComment>,
 ) -> MDResult {
-    {
-        let state = state.lock().await;
-        let now = chrono::Local::now().naive_local();
-        db::add_wine_comment(&state.db, wine_id, &comment.comment, now).await?;
-    }
+    let now = chrono::Local::now().naive_local();
+    db::add_wine_comment(&state.db, wine_id, &comment.comment, now).await?;
     super::markup::wine_table(axum::extract::State(state)).await
 }
 
@@ -90,12 +79,9 @@ pub(crate) async fn buy_wine(
     axum::extract::Form(event): axum::extract::Form<BuyWine>,
 ) -> MDResult {
     tracing::info!("buy wine");
-    {
-        let state = state.lock().await;
-        let date = chrono::NaiveDate::parse_from_str(&event.dt, "%Y-%m-%d")?;
-        let dt = chrono::NaiveDateTime::new(date, chrono::Local::now().naive_local().time());
-        db::add_wine_event(&state.db, wine_id, event.bottles, dt).await?;
-    }
+    let date = chrono::NaiveDate::parse_from_str(&event.dt, "%Y-%m-%d")?;
+    let dt = chrono::NaiveDateTime::new(date, chrono::Local::now().naive_local().time());
+    db::add_wine_event(&state.db, wine_id, event.bottles, dt).await?;
     super::markup::wine_table(axum::extract::State(state)).await
 }
 
@@ -112,15 +98,12 @@ pub(crate) async fn consume_wine(
     axum::extract::Form(event): axum::extract::Form<ConsumeWine>,
 ) -> MDResult {
     tracing::info!("consume wine");
-    {
-        let state = state.lock().await;
-        let date = chrono::NaiveDate::parse_from_str(&event.dt, "%Y-%m-%d")?;
-        let dt = chrono::NaiveDateTime::new(date, chrono::Local::now().naive_local().time());
+    let date = chrono::NaiveDate::parse_from_str(&event.dt, "%Y-%m-%d")?;
+    let dt = chrono::NaiveDateTime::new(date, chrono::Local::now().naive_local().time());
 
-        // Consuming is negative bottles
-        let bottles = -event.bottles;
-        db::add_wine_event(&state.db, wine_id, bottles, dt).await?;
-    }
+    // Consuming is negative bottles
+    let bottles = -event.bottles;
+    db::add_wine_event(&state.db, wine_id, bottles, dt).await?;
     super::markup::wine_table(axum::extract::State(state)).await
 }
 
@@ -163,7 +146,6 @@ pub(crate) async fn set_wine_image(
             tracing::info!("Got image with size: {}", image_data.len());
             let is_iphone = user_agent.as_str().contains("iPhone");
             let image = convert_image(&image_data, is_iphone).context("Image conversion")?;
-            let state = state.lock().await;
             db::set_wine_image(&state.db, wine_id, &image).await?;
         }
     }
@@ -185,15 +167,13 @@ pub(crate) async fn edit_image(
     axum::Form(edit_image): axum::Form<EditImage>,
 ) -> MDResult {
     tracing::info!("edit_image");
-    {
-        let state = state.lock().await;
-        let image_data = db::wine_image(&state.db, wine_id).await?
-            .ok_or(anyhow::anyhow!("No image data"))?;
-        let image = parse_image(&image_data)?;
-        let image = image.crop_imm(edit_image.x, edit_image.y, edit_image.w, edit_image.h);
-        let image_data = png_encode_image(image)?;
-        db::set_wine_image(&state.db, wine_id, &image_data).await?;
-    }
+    let image_data = db::wine_image(&state.db, wine_id)
+        .await?
+        .ok_or(anyhow::anyhow!("No image data"))?;
+    let image = parse_image(&image_data)?;
+    let image = image.crop_imm(edit_image.x, edit_image.y, edit_image.w, edit_image.h);
+    let image_data = png_encode_image(image)?;
+    db::set_wine_image(&state.db, wine_id, &image_data).await?;
 
     super::markup::wine_table(axum::extract::State(state)).await
 }
@@ -203,7 +183,6 @@ pub(crate) async fn wine_image(
     axum::extract::State(state): axum::extract::State<State>,
     axum::extract::Path(wine_id): axum::extract::Path<i64>,
 ) -> std::result::Result<Vec<u8>, AppError> {
-    let state = state.lock().await;
     Ok(db::wine_image(&state.db, wine_id)
         .await?
         .unwrap_or_default())

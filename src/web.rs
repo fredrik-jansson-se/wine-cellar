@@ -7,7 +7,7 @@ struct StateInner {
     db: sqlx::SqlitePool,
 }
 
-type State = std::sync::Arc<tokio::sync::Mutex<StateInner>>;
+type State = std::sync::Arc<StateInner>;
 
 type MDResult = std::result::Result<maud::Markup, AppError>;
 
@@ -38,7 +38,7 @@ impl IntoResponse for AppError {
 }
 
 pub async fn run(db: sqlx::SqlitePool) -> anyhow::Result<()> {
-    let state = std::sync::Arc::new(tokio::sync::Mutex::new(StateInner { db }));
+    let state = StateInner { db }.into();
     let router = axum::Router::new()
         .route("/add-wine", axum::routing::post(handlers::add_wine))
         .route("/", axum::routing::get(markup::index))
@@ -46,12 +46,18 @@ pub async fn run(db: sqlx::SqlitePool) -> anyhow::Result<()> {
             "/wines/{wine_id}/upload-image",
             axum::routing::get(markup::upload_wine_image),
         )
-        .route("/wines/{wine_id}/image",
-            axum::routing::get(handlers::wine_image))
-        .route("/wines/{wine_id}/edit-image",
-            axum::routing::get(markup::image::edit_image))
-        .route("/wines/{wine_id}/edit-image",
-            axum::routing::post(handlers::edit_image))
+        .route(
+            "/wines/{wine_id}/image",
+            axum::routing::get(handlers::wine_image),
+        )
+        .route(
+            "/wines/{wine_id}/edit-image",
+            axum::routing::get(markup::image::edit_image),
+        )
+        .route(
+            "/wines/{wine_id}/edit-image",
+            axum::routing::post(handlers::edit_image),
+        )
         .route(
             "/wines/{wine_id}/image",
             axum::routing::post(handlers::set_wine_image)

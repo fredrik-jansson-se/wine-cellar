@@ -189,7 +189,6 @@ pub(crate) async fn wine_table(
     axum::extract::State(state): axum::extract::State<State>,
 ) -> MDResult {
     tracing::info!("wine_table");
-    let state = state.lock().await;
     let wines = db::wines(&state.db).await?;
 
     Ok(maud::html! {
@@ -223,7 +222,6 @@ pub(crate) async fn wine_information(
     axum::extract::Path(wine_id): axum::extract::Path<i64>,
 ) -> MDResult {
     tracing::info!("enter");
-    let state = state.lock().await;
     let wine = db::get_wine(&state.db, wine_id).await?;
     let events = db::wine_inventory_events(&state.db, wine_id).await?;
     let comments = db::wine_comments(&state.db, wine_id).await?;
@@ -266,7 +264,6 @@ pub(crate) async fn edit_wine_grapes(
     axum::extract::State(state): axum::extract::State<State>,
     axum::extract::Path(wine_id): axum::extract::Path<i64>,
 ) -> MDResult {
-    let state = state.lock().await;
     let wine_grapes = db::get_wine_grapes(&state.db, wine_id).await?;
     let all_grapes = db::get_grapes(&state.db).await?;
     Ok(maud::html! {
