@@ -3,6 +3,8 @@ use axum::response::IntoResponse;
 mod handlers;
 mod markup;
 
+pub(crate) const MAX_UPLOAD_BYTES: usize = 10 * 1024 * 1024;
+
 struct StateInner {
     db: sqlx::SqlitePool,
 }
@@ -11,25 +13,58 @@ type State = std::sync::Arc<StateInner>;
 
 type MDResult = std::result::Result<maud::Markup, AppError>;
 
-pub(crate) struct AppError(anyhow::Error);
+pub(crate) struct AppError {
+    error: anyhow::Error,
+    status: axum::http::StatusCode,
+}
+
+impl AppError {
+    pub(crate) fn bad_request<E>(err: E) -> Self
+    where
+        E: Into<anyhow::Error>,
+    {
+        Self {
+            error: err.into(),
+            status: axum::http::StatusCode::BAD_REQUEST,
+        }
+    }
+
+    pub(crate) fn payload_too_large<E>(err: E) -> Self
+    where
+        E: Into<anyhow::Error>,
+    {
+        Self {
+            error: err.into(),
+            status: axum::http::StatusCode::PAYLOAD_TOO_LARGE,
+        }
+    }
+}
 
 impl<E> From<E> for AppError
 where
     E: Into<anyhow::Error>,
 {
     fn from(err: E) -> Self {
-        Self(err.into())
+        Self {
+            error: err.into(),
+            status: axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+        }
     }
 }
 
 impl IntoResponse for AppError {
     fn into_response(self) -> axum::response::Response {
-        tracing::error!("{}", self.0);
+        tracing::error!("{}", self.error);
+        let class = if self.status.is_client_error() {
+            "text-bg-warning"
+        } else {
+            "text-bg-danger"
+        };
         (
-            axum::http::StatusCode::INTERNAL_SERVER_ERROR,
+            self.status,
             maud::html! {
-                div class="text-bg-danger p-3" {
-                    (self.0)
+                div class=(format!("{class} p-3")) {
+                    (self.error)
                 }
             },
         )
@@ -61,8 +96,7 @@ pub async fn run(db: sqlx::SqlitePool) -> anyhow::Result<()> {
         .route(
             "/wines/{wine_id}/image",
             axum::routing::post(handlers::set_wine_image)
-                // Disable body limit on file
-                .layer(axum::extract::DefaultBodyLimit::disable()),
+                .layer(axum::extract::DefaultBodyLimit::max(MAX_UPLOAD_BYTES)),
         )
         .route(
             "/wines/{wine_id}/comment",

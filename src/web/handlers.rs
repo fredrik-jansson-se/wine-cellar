@@ -1,5 +1,6 @@
 use super::{MDResult, State};
 use anyhow::Context;
+use image::GenericImageView;
 
 use crate::{db, web::AppError};
 
@@ -135,13 +136,41 @@ pub(crate) async fn set_wine_image(
     axum_extra::extract::TypedHeader(user_agent): axum_extra::extract::TypedHeader<
         headers::UserAgent,
     >,
+    content_length: Option<
+        axum_extra::extract::TypedHeader<headers::ContentLength>,
+    >,
     mut mp: axum::extract::Multipart,
 ) -> MDResult {
     tracing::info!("new image");
 
+    if let Some(axum_extra::extract::TypedHeader(len)) = content_length {
+        if len.0 as usize > super::MAX_UPLOAD_BYTES {
+            tracing::warn!(
+                "Rejecting upload: content-length {} exceeds max {}",
+                len.0,
+                super::MAX_UPLOAD_BYTES
+            );
+            return Err(AppError::payload_too_large(anyhow::anyhow!(
+                "Image upload too large (max {} bytes)",
+                super::MAX_UPLOAD_BYTES
+            )));
+        }
+    }
+
     while let Some(field) = mp.next_field().await? {
         if let Some("image") = field.name() {
             let image_data = field.bytes().await?;
+            if image_data.len() > super::MAX_UPLOAD_BYTES {
+                tracing::warn!(
+                    "Rejecting upload: field size {} exceeds max {}",
+                    image_data.len(),
+                    super::MAX_UPLOAD_BYTES
+                );
+                return Err(AppError::payload_too_large(anyhow::anyhow!(
+                    "Image upload too large (max {} bytes)",
+                    super::MAX_UPLOAD_BYTES
+                )));
+            }
 
             tracing::info!("Got image with size: {}", image_data.len());
             let is_iphone = user_agent.as_str().contains("iPhone");
@@ -171,7 +200,22 @@ pub(crate) async fn edit_image(
         .await?
         .ok_or(anyhow::anyhow!("No image data"))?;
     let image = parse_image(&image_data)?;
-    let image = image.crop_imm(edit_image.x, edit_image.y, edit_image.w, edit_image.h);
+    if edit_image.w == 0 || edit_image.h == 0 {
+        return Err(AppError::bad_request(anyhow::anyhow!(
+            "Crop size must be non-zero"
+        )));
+    }
+    let (img_w, img_h) = image.dimensions();
+    if edit_image.x >= img_w || edit_image.y >= img_h {
+        return Err(AppError::bad_request(anyhow::anyhow!(
+            "Crop origin out of bounds"
+        )));
+    }
+    let max_w = img_w - edit_image.x;
+    let max_h = img_h - edit_image.y;
+    let crop_w = edit_image.w.min(max_w);
+    let crop_h = edit_image.h.min(max_h);
+    let image = image.crop_imm(edit_image.x, edit_image.y, crop_w, crop_h);
     let image_data = png_encode_image(image)?;
     db::set_wine_image(&state.db, wine_id, &image_data).await?;
 
