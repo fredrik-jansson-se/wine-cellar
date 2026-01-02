@@ -9,7 +9,7 @@ const STYLE: &str = r#"
             }
             .img-select-wrap img {
                 display: block;
-                max-width: "100%";
+                max-width: 100%;
             }
             .selection-rect {
                 position: absolute;
