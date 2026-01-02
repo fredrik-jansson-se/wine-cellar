@@ -136,25 +136,23 @@ pub(crate) async fn set_wine_image(
     axum_extra::extract::TypedHeader(user_agent): axum_extra::extract::TypedHeader<
         headers::UserAgent,
     >,
-    content_length: Option<
-        axum_extra::extract::TypedHeader<headers::ContentLength>,
-    >,
+    content_length: Option<axum_extra::extract::TypedHeader<headers::ContentLength>>,
     mut mp: axum::extract::Multipart,
 ) -> MDResult {
     tracing::info!("new image");
 
-    if let Some(axum_extra::extract::TypedHeader(len)) = content_length {
-        if len.0 as usize > super::MAX_UPLOAD_BYTES {
-            tracing::warn!(
-                "Rejecting upload: content-length {} exceeds max {}",
-                len.0,
-                super::MAX_UPLOAD_BYTES
-            );
-            return Err(AppError::payload_too_large(anyhow::anyhow!(
-                "Image upload too large (max {} bytes)",
-                super::MAX_UPLOAD_BYTES
-            )));
-        }
+    if let Some(axum_extra::extract::TypedHeader(len)) = content_length
+        && len.0 as usize > super::MAX_UPLOAD_BYTES
+    {
+        tracing::warn!(
+            "Rejecting upload: content-length {} exceeds max {}",
+            len.0,
+            super::MAX_UPLOAD_BYTES
+        );
+        return Err(AppError::payload_too_large(anyhow::anyhow!(
+            "Image upload too large (max {} bytes)",
+            super::MAX_UPLOAD_BYTES
+        )));
     }
 
     while let Some(field) = mp.next_field().await? {
