@@ -46,7 +46,7 @@ fn add_wine_modal() -> Markup {
                         button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close" {}
                     }
                     form id="add-wine"
-                        hx-post="/add-wine" hx-target="#wineTable" hx-swap="beforeend" hx-target-error="#error" {
+                        hx-post="/add-wine" hx-target="#wineTableBody" hx-swap="beforeend" hx-target-error="#error" {
                         div class="modal-body" {
                             div class="mb-3" {
                                 label for="name" class="form-label" { "Name" }
@@ -71,7 +71,17 @@ fn add_wine_modal() -> Markup {
 pub(crate) async fn wine_table_row(
     state: &crate::web::StateInner,
     wine: crate::db::Wine,
+    grape_filter: Option<&str>,
 ) -> MDResult {
+    let wine_grapes = db::get_wine_grapes(&state.db, wine.wine_id).await?;
+    if let Some(grape_filter) = grape_filter.map(|gf| gf.to_lowercase())
+        && !wine_grapes
+            .iter()
+            .any(|grape| grape.to_lowercase().starts_with(&grape_filter))
+    {
+        return Ok(maud::html! {});
+    }
+
     struct MainWine {
         id: i64,
         name: String,
@@ -83,7 +93,6 @@ pub(crate) async fn wine_table_row(
     }
     let inv_events = db::wine_inventory_events(&state.db, wine.wine_id).await?;
     let inventory: i64 = inv_events.iter().map(|ie| ie.bottles).sum();
-    let wine_grapes = db::get_wine_grapes(&state.db, wine.wine_id).await?;
     let last_comment = db::last_wine_comment(&state.db, wine.wine_id).await?;
     let w = MainWine {
         id: wine.wine_id,
@@ -185,11 +194,29 @@ pub(crate) async fn wine_table_row(
     })
 }
 
-pub(crate) async fn wine_table(
+#[derive(Debug, serde::Deserialize)]
+pub(crate) struct WineTableBody {
+    grape_filter: Option<String>,
+}
+
+#[tracing::instrument(skip(state))]
+pub(crate) async fn wine_table_body(
     axum::extract::State(state): axum::extract::State<State>,
+    axum::extract::Query(query): axum::extract::Query<WineTableBody>,
+) -> MDResult {
+    tracing::info!("enter");
+    let wines = db::wines(&state.db).await?;
+    Ok(maud::html! {
+        @for wine in wines {
+            (wine_table_row(&state, wine, query.grape_filter.as_deref()).await?)
+        }
+    })
+}
+
+pub(crate) async fn wine_table(
+    axum::extract::State(_state): axum::extract::State<State>,
 ) -> MDResult {
     tracing::info!("wine_table");
-    let wines = db::wines(&state.db).await?;
 
     Ok(maud::html! {
         (page_header("Wine Cellar"))
@@ -203,14 +230,27 @@ pub(crate) async fn wine_table(
                     th scope="col" { "Year" }
                     th scope="col" { "Bottles" }
                     th scope="col" { "Comment" }
-                    th scope="col" { "Grapes" }
+                    th scope="col" {
+                        "Grapes"
+                        svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
+                            fill="currentColor" class="bi bi-filter" viewBox="0 0 16 16"
+                            data-bs-toggle="collapse" data-bs-target="#filterGrapes"
+                        {
+                          path d="M6 10.5a.5.5 0 0 1 .5-.5h3a.5.5 0 0 1 0 1h-3a.5.5 0 0 1-.5-.5m-2-3a.5.5 0 0 1 .5-.5h7a.5.5 0 0 1 0 1h-7a.5.5 0 0 1-.5-.5m-2-3a.5.5 0 0 1 .5-.5h11a.5.5 0 0 1 0 1h-11a.5.5 0 0 1-.5-.5";
+                        }
+                        div id="filterGrapes" class="accordion-collapse collapse" {
+                            input name="grape_filter" id="grapeFilter" class="form-control"
+                            hx-get="/wine-table-body"
+                            hx-trigger="input changed delay:500ms, keyup[key=='Enter'],load"
+                            hx-target="#wineTableBody"
+                            {}
+                        }
+                    }
                     th scope="col" {}
                 }
             }
-            tbody id="wineTable" {
-                @for wine in wines {
-                    (wine_table_row(&state, wine).await?)
-                }
+            tbody id="wineTableBody" {
+                div hx-get="/wine-table-body" hx-trigger="load" hx-target="#wineTableBody" hx-target-error="#error" {}
             }
         }
     })
