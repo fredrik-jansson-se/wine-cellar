@@ -80,6 +80,7 @@ pub async fn run(db: sqlx::SqlitePool) -> anyhow::Result<()> {
             axum::routing::delete(handlers::delete_wine),
         )
         .route("/wines", axum::routing::get(markup::wine_table))
+        .route("/wine-table-body", axum::routing::get(markup::wine_table_body))
         .with_state(state);
 
     let lap = std::env::var("WINE_LAP").unwrap_or("0.0.0.0:20000".to_owned());

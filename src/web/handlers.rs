@@ -18,7 +18,7 @@ pub(crate) async fn add_wine(
     tracing::info!("add_wine");
     let wine = db::add_wine(&state.db, &wine.name, wine.year).await?;
     tracing::info!("Added: {wine:?}");
-    super::markup::wine_table_row(&state, wine).await
+    super::markup::wine_table_row(&state, wine, None).await
 }
 
 #[tracing::instrument(skip(state))]
