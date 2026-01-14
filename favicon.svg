@@ -1,0 +1,13 @@
+ <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+    <defs>
+      <linearGradient id="wine" x1="0" y1="0" x2="0" y2="1">
+        <stop offset="0" stop-color="#7a0f1a"/>
+        <stop offset="1" stop-color="#3a0a0f"/>
+      </linearGradient>
+    </defs>
+    <rect width="64" height="64" rx="12" fill="#f4efe9"/>
+    <path d="M18 10h28v8c0 11-9 20-20 20h-4c-11 0-20-9-20-20v-8h16z" fill="#ffffff"/>
+    <path d="M18 18h28v2c0 9-7 16-16 16h-4c-9 0-16-7-16-16v-2z" fill="url(#wine)"/>
+    <rect x="30" y="36" width="4" height="16" fill="#3d3d3d"/>
+    <rect x="22" y="52" width="20" height="4" rx="2" fill="#3d3d3d"/>
+  </svg>

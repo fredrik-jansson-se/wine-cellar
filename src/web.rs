@@ -1,9 +1,11 @@
-
+mod error;
 mod handlers;
 mod markup;
-mod error;
 
+use axum::response::IntoResponse;
 use error::*;
+
+const FAVICON: &str = include_str!(concat!(env!("CARGO_MANIFEST_DIR"), "/favicon.svg"));
 
 pub(crate) const MAX_UPLOAD_BYTES: usize = 10 * 1024 * 1024;
 
@@ -15,10 +17,23 @@ type State = std::sync::Arc<StateInner>;
 
 type MDResult = std::result::Result<maud::Markup, AppError>;
 
-
 pub async fn run(db: sqlx::SqlitePool) -> anyhow::Result<()> {
     let state = StateInner { db }.into();
     let router = axum::Router::new()
+        .route(
+            "/favicon.ico",
+            axum::routing::get(|| async { axum::response::Redirect::permanent("/favicon.svg") }),
+        )
+        .route(
+            "/favicon.svg",
+            axum::routing::get(|| async {
+                (
+                    [(axum::http::header::CONTENT_TYPE, "image/svg+xml")],
+                    FAVICON,
+                )
+                    .into_response()
+            }),
+        )
         .route("/add-wine", axum::routing::post(handlers::add_wine))
         .route("/", axum::routing::get(markup::index))
         .route(
@@ -80,7 +95,10 @@ pub async fn run(db: sqlx::SqlitePool) -> anyhow::Result<()> {
             axum::routing::delete(handlers::delete_wine),
         )
         .route("/wines", axum::routing::get(markup::wine_table))
-        .route("/wine-table-body", axum::routing::get(markup::wine_table_body))
+        .route(
+            "/wine-table-body",
+            axum::routing::get(markup::wine_table_body),
+        )
         .with_state(state);
 
     let lap = std::env::var("WINE_LAP").unwrap_or("0.0.0.0:20000".to_owned());
