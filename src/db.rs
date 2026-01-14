@@ -248,7 +248,8 @@ pub(crate) async fn wine_image(
     wine_id: i64,
 ) -> anyhow::Result<Option<Vec<u8>>> {
     let res = sqlx::query_scalar!("SELECT image FROM wines WHERE wine_id=$1", wine_id)
-        .fetch_one(db)
-        .await?;
+        .fetch_optional(db)
+        .await?
+        .flatten();
     Ok(res)
 }

@@ -36,7 +36,7 @@ pub(crate) async fn post_wine_grapes(
     axum::extract::Path(wine_id): axum::extract::Path<i64>,
     axum::extract::Form(form): axum::extract::Form<std::collections::HashMap<String, String>>,
 ) -> MDResult {
-    let grapes:Vec<_> = form.values().map(|v| v.as_ref()).collect();
+    let grapes: Vec<_> = form.values().map(|v| v.as_ref()).collect();
     db::set_wine_grapes(&state.db, wine_id, &grapes).await?;
     super::markup::wine_table(axum::extract::State(state)).await
 }
@@ -213,12 +213,18 @@ pub(crate) async fn edit_image(
 pub(crate) async fn wine_image(
     axum::extract::State(state): axum::extract::State<State>,
     axum::extract::Path(wine_id): axum::extract::Path<i64>,
-) -> std::result::Result<(axum::http::StatusCode, Vec<u8>), AppError> {
-    let img = db::wine_image(&state.db, wine_id)
-        .await?;
+) -> std::result::Result<axum::response::Response, AppError> {
+    let img = db::wine_image(&state.db, wine_id).await?;
     if let Some(img) = img {
-        Ok((axum::http::StatusCode::OK, img))
+        axum::response::Response::builder()
+            .status(axum::http::StatusCode::OK)
+            .header(axum::http::header::CONTENT_TYPE, "image/png")
+            .body(img.into())
+            .map_err(|e| e.into())
     } else {
-        Ok((axum::http::StatusCode::NOT_FOUND, Vec::new()))
+        axum::response::Response::builder()
+            .status(axum::http::StatusCode::NOT_FOUND)
+            .body(Vec::new().into())
+            .map_err(|e| e.into())
     }
 }
