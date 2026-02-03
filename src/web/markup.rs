@@ -73,8 +73,10 @@ pub(crate) async fn wine_table_row(
     wine: crate::db::Wine,
     grape_filter: Option<&str>,
 ) -> MDResult {
+    tracing::info!("Rendering row for {}", wine.name);
     let wine_grapes = db::get_wine_grapes(&state.db, wine.wine_id).await?;
     if let Some(grape_filter) = grape_filter.map(|gf| gf.to_lowercase())
+        && !grape_filter.is_empty() 
         && !wine_grapes
             .iter()
             .any(|grape| grape.to_lowercase().starts_with(&grape_filter))
@@ -82,6 +84,7 @@ pub(crate) async fn wine_table_row(
         return Ok(maud::html! {});
     }
 
+    #[derive(Debug)]
     struct MainWine {
         id: i64,
         name: String,

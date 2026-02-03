@@ -61,6 +61,7 @@ pub(crate) async fn get_wine(db: &sqlx::SqlitePool, id: i64) -> anyhow::Result<W
     })
 }
 
+#[tracing::instrument(skip(db))]
 pub(crate) async fn wine_inventory_events(
     db: &sqlx::SqlitePool,
     wine_id: i64,
@@ -173,7 +174,7 @@ pub(crate) async fn set_wine_image(
     Ok(())
 }
 
-#[derive(sqlx::FromRow)]
+#[derive(Debug, sqlx::FromRow)]
 pub(crate) struct WineComment {
     pub comment: String,
     pub dt: chrono::NaiveDateTime,
@@ -193,10 +194,12 @@ pub(crate) async fn wine_comments(
     Ok(res)
 }
 
+#[tracing::instrument(skip(db))]
 pub(crate) async fn last_wine_comment(
     db: &sqlx::SqlitePool,
     wine_id: i64,
 ) -> anyhow::Result<Option<WineComment>> {
+    tracing::info!("enter");
     let res = sqlx::query_as!(
         WineComment,
         "SELECT comment,dt FROM wine_comments WHERE wine_id=$1 ORDER by dt DESC LIMIT 1",
