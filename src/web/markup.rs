@@ -220,25 +220,29 @@ pub(crate) struct WineTableBody {
     grape_filter: Option<String>,
 }
 
+async fn render_wine_rows(
+    state: &crate::web::StateInner,
+    grape_filter: Option<&str>,
+) -> MDResult {
+    let wines = db::wines(&state.db).await?;
+    Ok(maud::html! {
+        @for wine in wines {
+            (wine_table_row(state, wine, grape_filter).await?)
+        }
+    })
+}
+
 #[tracing::instrument(skip(state))]
 pub(crate) async fn wine_table_body(
     axum::extract::State(state): axum::extract::State<State>,
     axum::extract::Query(query): axum::extract::Query<WineTableBody>,
 ) -> MDResult {
     tracing::info!("enter");
-    let wines = db::wines(&state.db).await?;
-    Ok(maud::html! {
-        @for wine in wines {
-            (wine_table_row(&state, wine, query.grape_filter.as_deref()).await?)
-        }
-    })
+    render_wine_rows(&state, query.grape_filter.as_deref()).await
 }
 
-#[tracing::instrument]
-pub(crate) async fn wine_table() -> MDResult {
-    tracing::info!("wine_table");
-
-    Ok(maud::html! {
+fn wine_table_html(body: Option<Markup>) -> Markup {
+    maud::html! {
         (page_header("Wine Cellar"))
         a href="#" data-bs-toggle="modal" data-bs-target="#addWineModal" {"Add Wine"}
         div id="error" {}
@@ -270,10 +274,25 @@ pub(crate) async fn wine_table() -> MDResult {
                 }
             }
             tbody id="wineTableBody" {
-                div hx-get="/wine-table-body" hx-trigger="load" hx-target="#wineTableBody" hx-target-error="#error" {}
+                @if let Some(body) = body {
+                    (body)
+                } @else {
+                    div hx-get="/wine-table-body" hx-trigger="load" hx-target="#wineTableBody" hx-target-error="#error" {}
+                }
             }
         }
-    })
+    }
+}
+
+#[tracing::instrument]
+pub(crate) async fn wine_table() -> MDResult {
+    tracing::info!("wine_table");
+    Ok(wine_table_html(None))
+}
+
+pub(crate) async fn wine_table_populated(state: &crate::web::StateInner) -> MDResult {
+    let rows = render_wine_rows(state, None).await?;
+    Ok(wine_table_html(Some(rows)))
 }
 
 #[tracing::instrument(skip(state))]

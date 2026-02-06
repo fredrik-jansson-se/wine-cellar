@@ -27,7 +27,7 @@ pub(crate) async fn delete_wine(
     axum::extract::Path(wine_id): axum::extract::Path<i64>,
 ) -> MDResult {
     db::delete_wine(&state.db, wine_id).await?;
-    super::markup::wine_table().await
+    super::markup::wine_table_populated(&state).await
 }
 
 #[tracing::instrument(skip(state))]
@@ -38,7 +38,7 @@ pub(crate) async fn post_wine_grapes(
 ) -> MDResult {
     let grapes: Vec<_> = form.values().map(|v| v.as_ref()).collect();
     db::set_wine_grapes(&state.db, wine_id, &grapes).await?;
-    super::markup::wine_table().await
+    super::markup::wine_table_populated(&state).await
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -54,7 +54,7 @@ pub(crate) async fn add_comment(
 ) -> MDResult {
     let now = chrono::Local::now().naive_local();
     db::add_wine_comment(&state.db, wine_id, &comment.comment, now).await?;
-    super::markup::wine_table().await
+    super::markup::wine_table_populated(&state).await
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -73,7 +73,7 @@ pub(crate) async fn buy_wine(
     let date = chrono::NaiveDate::parse_from_str(&event.dt, "%Y-%m-%d")?;
     let dt = chrono::NaiveDateTime::new(date, chrono::Local::now().naive_local().time());
     db::add_wine_event(&state.db, wine_id, event.bottles, dt).await?;
-    super::markup::wine_table().await
+    super::markup::wine_table_populated(&state).await
 }
 
 #[derive(serde::Deserialize, Debug)]
@@ -95,7 +95,7 @@ pub(crate) async fn consume_wine(
     // Consuming is negative bottles
     let bottles = -event.bottles;
     db::add_wine_event(&state.db, wine_id, bottles, dt).await?;
-    super::markup::wine_table().await
+    super::markup::wine_table_populated(&state).await
 }
 
 fn parse_image(image_data: &[u8]) -> anyhow::Result<image::DynamicImage> {
@@ -166,7 +166,7 @@ pub(crate) async fn set_wine_image(
             db::set_wine_image(&state.db, wine_id, &image).await?;
         }
     }
-    super::markup::wine_table().await
+    super::markup::wine_table_populated(&state).await
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -207,7 +207,7 @@ pub(crate) async fn edit_image(
     let image_data = png_encode_image(image)?;
     db::set_wine_image(&state.db, wine_id, &image_data).await?;
 
-    super::markup::wine_table().await
+    super::markup::wine_table_populated(&state).await
 }
 
 #[tracing::instrument(skip(state))]
