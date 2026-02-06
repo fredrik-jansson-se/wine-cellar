@@ -5,6 +5,20 @@ use maud::Markup;
 
 pub(crate) mod image;
 
+const TRACE_SCRIPT: &str = r#"
+document.body.addEventListener("htmx:afterRequest", (e) => {
+const tp = e.detail.xhr.getResponseHeader("traceparent");
+if (tp) window.currentTraceparent = tp;
+});
+
+document.body.addEventListener("htmx:configRequest", (e) => {
+if (window.currentTraceparent) {
+  e.detail.headers["traceparent"] = window.currentTraceparent;
+}
+});
+"#;
+
+#[tracing::instrument]
 pub(crate) async fn index() -> Markup {
     use maud::DOCTYPE;
     maud::html! {
@@ -25,6 +39,9 @@ pub(crate) async fn index() -> Markup {
        script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
          integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI"
          crossorigin="anonymous" {}
+       script {
+           (maud::PreEscaped(TRACE_SCRIPT))
+       }
       }
     }
 }
@@ -68,6 +85,7 @@ fn add_wine_modal() -> Markup {
     }
 }
 
+#[tracing::instrument(skip(state))]
 pub(crate) async fn wine_table_row(
     state: &crate::web::StateInner,
     wine: crate::db::Wine,
@@ -76,7 +94,7 @@ pub(crate) async fn wine_table_row(
     tracing::info!("Rendering row for {}", wine.name);
     let wine_grapes = db::get_wine_grapes(&state.db, wine.wine_id).await?;
     if let Some(grape_filter) = grape_filter.map(|gf| gf.to_lowercase())
-        && !grape_filter.is_empty() 
+        && !grape_filter.is_empty()
         && !wine_grapes
             .iter()
             .any(|grape| grape.to_lowercase().starts_with(&grape_filter))
@@ -216,9 +234,8 @@ pub(crate) async fn wine_table_body(
     })
 }
 
-pub(crate) async fn wine_table(
-    axum::extract::State(_state): axum::extract::State<State>,
-) -> MDResult {
+#[tracing::instrument]
+pub(crate) async fn wine_table() -> MDResult {
     tracing::info!("wine_table");
 
     Ok(maud::html! {
@@ -303,6 +320,7 @@ pub(crate) async fn wine_information(
     })
 }
 
+#[tracing::instrument(skip(state))]
 pub(crate) async fn edit_wine_grapes(
     axum::extract::State(state): axum::extract::State<State>,
     axum::extract::Path(wine_id): axum::extract::Path<i64>,

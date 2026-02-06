@@ -29,6 +29,7 @@ pub(crate) async fn connect() -> anyhow::Result<sqlx::SqlitePool> {
     Ok(db)
 }
 
+#[tracing::instrument(skip(db))]
 pub(crate) async fn wines(db: &sqlx::SqlitePool) -> anyhow::Result<Vec<Wine>> {
     let res = sqlx::query!("SELECT wine_id, name, year, image IS NOT NULL AS has_image from wines")
         .fetch_all(db)
@@ -46,6 +47,7 @@ pub(crate) async fn wines(db: &sqlx::SqlitePool) -> anyhow::Result<Vec<Wine>> {
     Ok(res)
 }
 
+#[tracing::instrument(skip(db))]
 pub(crate) async fn get_wine(db: &sqlx::SqlitePool, id: i64) -> anyhow::Result<Wine> {
     let res = sqlx::query!(
         "SELECT wine_id, name, year, image IS NOT NULL AS has_image from wines WHERE wine_id=$1",
@@ -77,6 +79,7 @@ pub(crate) async fn wine_inventory_events(
     Ok(res)
 }
 
+#[tracing::instrument(skip(db))]
 pub(crate) async fn add_wine(db: &sqlx::SqlitePool, name: &str, year: i64) -> anyhow::Result<Wine> {
     let wine_id = sqlx::query_scalar!(
         "INSERT INTO wines (name, year) VALUES ($1, $2) RETURNING wine_id",
@@ -88,6 +91,7 @@ pub(crate) async fn add_wine(db: &sqlx::SqlitePool, name: &str, year: i64) -> an
     get_wine(db, wine_id).await
 }
 
+#[tracing::instrument(skip(db))]
 pub(crate) async fn delete_wine(db: &sqlx::SqlitePool, wine_id: i64) -> anyhow::Result<()> {
     let mut trans = db.begin().await?;
     sqlx::query!("DELETE FROM wine_comments WHERE wine_id=$1", wine_id)
@@ -113,6 +117,7 @@ pub(crate) struct Grape {
     pub rowid: i64,
     pub name: String,
 }
+#[tracing::instrument(skip(db))]
 pub(crate) async fn get_grapes(db: &sqlx::SqlitePool) -> anyhow::Result<Vec<Grape>> {
     let res = sqlx::query!("SELECT rowid, name FROM grapes ORDER BY name")
         .fetch_all(db)
@@ -127,6 +132,7 @@ pub(crate) async fn get_grapes(db: &sqlx::SqlitePool) -> anyhow::Result<Vec<Grap
     Ok(res)
 }
 
+#[tracing::instrument(skip(db))]
 pub(crate) async fn get_wine_grapes(
     db: &sqlx::SqlitePool,
     wine_id: i64,
@@ -140,6 +146,7 @@ pub(crate) async fn get_wine_grapes(
 
     Ok(res)
 }
+#[tracing::instrument(skip(db))]
 pub(crate) async fn set_wine_grapes(
     db: &sqlx::SqlitePool,
     wine_id: i64,
@@ -163,6 +170,7 @@ pub(crate) async fn set_wine_grapes(
     Ok(())
 }
 
+#[tracing::instrument(skip(db))]
 pub(crate) async fn set_wine_image(
     db: &sqlx::SqlitePool,
     wine_id: i64,
@@ -180,6 +188,7 @@ pub(crate) struct WineComment {
     pub dt: chrono::NaiveDateTime,
 }
 
+#[tracing::instrument(skip(db))]
 pub(crate) async fn wine_comments(
     db: &sqlx::SqlitePool,
     wine_id: i64,
@@ -199,7 +208,6 @@ pub(crate) async fn last_wine_comment(
     db: &sqlx::SqlitePool,
     wine_id: i64,
 ) -> anyhow::Result<Option<WineComment>> {
-    tracing::info!("enter");
     let res = sqlx::query_as!(
         WineComment,
         "SELECT comment,dt FROM wine_comments WHERE wine_id=$1 ORDER by dt DESC LIMIT 1",
@@ -210,6 +218,7 @@ pub(crate) async fn last_wine_comment(
     Ok(res)
 }
 
+#[tracing::instrument(skip(db))]
 pub(crate) async fn add_wine_comment(
     db: &sqlx::SqlitePool,
     wine_id: i64,
@@ -246,6 +255,7 @@ pub(crate) async fn add_wine_event(
     Ok(())
 }
 
+#[tracing::instrument(skip(db))]
 pub(crate) async fn wine_image(
     db: &sqlx::SqlitePool,
     wine_id: i64,

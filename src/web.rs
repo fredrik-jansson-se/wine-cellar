@@ -34,8 +34,8 @@ pub async fn run(db: sqlx::SqlitePool) -> anyhow::Result<()> {
                     .into_response()
             }),
         )
-        .route("/add-wine", axum::routing::post(handlers::add_wine))
         .route("/", axum::routing::get(markup::index))
+        .route("/add-wine", axum::routing::post(handlers::add_wine))
         .route(
             "/wines/{wine_id}/upload-image",
             axum::routing::get(markup::upload_wine_image),
@@ -99,7 +99,9 @@ pub async fn run(db: sqlx::SqlitePool) -> anyhow::Result<()> {
             "/wine-table-body",
             axum::routing::get(markup::wine_table_body),
         )
-        .with_state(state);
+        .with_state(state)
+        .layer(axum_tracing_opentelemetry::middleware::OtelInResponseLayer)
+        .layer(axum_tracing_opentelemetry::middleware::OtelAxumLayer::default());
 
     let lap = std::env::var("WINE_LAP").unwrap_or("0.0.0.0:20000".to_owned());
     tracing::info!("Listening: {lap}");

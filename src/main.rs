@@ -4,7 +4,12 @@ mod web;
 #[tokio::main]
 async fn main() -> anyhow::Result<()> {
     let _ = dotenv::dotenv();
-    tracing_subscriber::fmt::init();
+
+    let _otlp_guard = init_tracing_opentelemetry::TracingConfig::production()
+        .with_stderr()
+        .with_otel(true)
+        .init_subscriber()?;
+
     let db_pool = db::connect().await?;
 
     tracing::info!("Migrate DB");
