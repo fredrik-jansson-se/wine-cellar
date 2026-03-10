@@ -2,6 +2,19 @@ use std::str::FromStr;
 
 use anyhow::Context;
 
+pub(crate) struct FoodPairing {
+    pub id: i64,
+    pub food: String,
+}
+
+pub(crate) struct WineWithPairings {
+    #[allow(dead_code)]
+    pub wine_id: i64,
+    pub name: String,
+    pub year: i64,
+    pub matched_pairings: Vec<String>,
+}
+
 #[derive(Debug)]
 pub(crate) struct Wine {
     pub wine_id: i64,
@@ -94,6 +107,9 @@ pub(crate) async fn add_wine(db: &sqlx::SqlitePool, name: &str, year: i64) -> an
 #[tracing::instrument(skip(db))]
 pub(crate) async fn delete_wine(db: &sqlx::SqlitePool, wine_id: i64) -> anyhow::Result<()> {
     let mut trans = db.begin().await?;
+    sqlx::query!("DELETE FROM wine_food_pairings WHERE wine_id=$1", wine_id)
+        .execute(&mut *trans)
+        .await?;
     sqlx::query!("DELETE FROM wine_comments WHERE wine_id=$1", wine_id)
         .execute(&mut *trans)
         .await?;
@@ -265,4 +281,225 @@ pub(crate) async fn wine_image(
         .await?
         .flatten();
     Ok(res)
+}
+
+/// Returns all food pairings for the given wine, ordered by insertion time.
+#[tracing::instrument(skip(db))]
+pub(crate) async fn get_wine_food_pairings(
+    db: &sqlx::SqlitePool,
+    wine_id: i64,
+) -> anyhow::Result<Vec<FoodPairing>> {
+    let res = sqlx::query!(
+        "SELECT id, food FROM wine_food_pairings WHERE wine_id = $1 ORDER BY id",
+        wine_id
+    )
+    .fetch_all(db)
+    .await?
+    .into_iter()
+    .map(|r| FoodPairing {
+        id: r.id.expect("id is NOT NULL"),
+        food: r.food,
+    })
+    .collect();
+    Ok(res)
+}
+
+/// Inserts a new food pairing and returns the created record.
+/// Returns a DB error (unique constraint) if the pairing already exists
+/// case-insensitively on this wine.
+#[tracing::instrument(skip(db))]
+pub(crate) async fn add_food_pairing(
+    db: &sqlx::SqlitePool,
+    wine_id: i64,
+    food: &str,
+) -> anyhow::Result<FoodPairing> {
+    let r = sqlx::query!(
+        "INSERT INTO wine_food_pairings (wine_id, food) VALUES ($1, $2) RETURNING id, food",
+        wine_id,
+        food
+    )
+    .fetch_one(db)
+    .await?;
+    Ok(FoodPairing {
+        id: r.id.expect("id is NOT NULL"),
+        food: r.food,
+    })
+}
+
+/// Deletes a food pairing by its id, scoped to wine_id to prevent cross-wine deletions.
+#[tracing::instrument(skip(db))]
+pub(crate) async fn remove_food_pairing(
+    db: &sqlx::SqlitePool,
+    pairing_id: i64,
+    wine_id: i64,
+) -> anyhow::Result<()> {
+    sqlx::query!(
+        "DELETE FROM wine_food_pairings WHERE id = $1 AND wine_id = $2",
+        pairing_id,
+        wine_id
+    )
+    .execute(db)
+    .await?;
+    Ok(())
+}
+
+/// Searches wines by food pairing using a case-insensitive substring match.
+/// Special LIKE characters (`%`, `_`, `\`) in `q` are escaped so they are
+/// treated as literals.
+#[tracing::instrument(skip(db))]
+pub(crate) async fn search_wines_by_food(
+    db: &sqlx::SqlitePool,
+    q: &str,
+) -> anyhow::Result<Vec<WineWithPairings>> {
+    let escaped = q
+        .replace('\\', "\\\\")
+        .replace('%', "\\%")
+        .replace('_', "\\_");
+    let pattern = format!("%{}%", escaped);
+
+    let wines = sqlx::query!(
+        r#"SELECT DISTINCT w.wine_id, w.name, w.year
+           FROM wines w
+           JOIN wine_food_pairings fp ON fp.wine_id = w.wine_id
+           WHERE fp.food LIKE $1 ESCAPE '\'
+           ORDER BY w.name, w.year"#,
+        pattern
+    )
+    .fetch_all(db)
+    .await?;
+
+    let mut result = Vec::new();
+    for wine in wines {
+        let pairings = sqlx::query_scalar!(
+            "SELECT food FROM wine_food_pairings WHERE wine_id = $1 ORDER BY id",
+            wine.wine_id
+        )
+        .fetch_all(db)
+        .await?;
+        result.push(WineWithPairings {
+            wine_id: wine.wine_id.expect("wine_id is NOT NULL"),
+            name: wine.name,
+            year: wine.year,
+            matched_pairings: pairings,
+        });
+    }
+    Ok(result)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    async fn setup_db() -> sqlx::SqlitePool {
+        let pool = sqlx::SqlitePool::connect("sqlite::memory:")
+            .await
+            .expect("connect to in-memory DB");
+        sqlx::migrate!().run(&pool).await.expect("run migrations");
+        pool
+    }
+
+    #[tokio::test]
+    async fn test_add_and_get_food_pairing() {
+        let db = setup_db().await;
+        let wine = add_wine(&db, "Test Wine", 2020).await.unwrap();
+
+        let pairing = add_food_pairing(&db, wine.wine_id, "grilled salmon")
+            .await
+            .unwrap();
+        assert_eq!(pairing.food, "grilled salmon");
+
+        let pairings = get_wine_food_pairings(&db, wine.wine_id).await.unwrap();
+        assert_eq!(pairings.len(), 1);
+        assert_eq!(pairings[0].food, "grilled salmon");
+    }
+
+    #[tokio::test]
+    async fn test_remove_food_pairing() {
+        let db = setup_db().await;
+        let wine = add_wine(&db, "Test Wine", 2020).await.unwrap();
+
+        let pairing = add_food_pairing(&db, wine.wine_id, "aged cheddar")
+            .await
+            .unwrap();
+        remove_food_pairing(&db, pairing.id, wine.wine_id)
+            .await
+            .unwrap();
+
+        let pairings = get_wine_food_pairings(&db, wine.wine_id).await.unwrap();
+        assert!(pairings.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_duplicate_pairing_rejected() {
+        let db = setup_db().await;
+        let wine = add_wine(&db, "Test Wine", 2020).await.unwrap();
+
+        add_food_pairing(&db, wine.wine_id, "salmon").await.unwrap();
+        // Same pairing, different case — should fail
+        let err = add_food_pairing(&db, wine.wine_id, "Salmon").await;
+        assert!(err.is_err(), "duplicate pairing must be rejected");
+    }
+
+    #[tokio::test]
+    async fn test_cascade_delete_removes_pairings() {
+        let db = setup_db().await;
+        let wine = add_wine(&db, "Test Wine", 2020).await.unwrap();
+        add_food_pairing(&db, wine.wine_id, "lamb chops")
+            .await
+            .unwrap();
+
+        delete_wine(&db, wine.wine_id).await.unwrap();
+
+        // The get_wine call should now fail, and pairings should be gone
+        let pairings = get_wine_food_pairings(&db, wine.wine_id).await.unwrap();
+        assert!(pairings.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_search_wines_by_food_match() {
+        let db = setup_db().await;
+        let wine = add_wine(&db, "Salmon Wine", 2021).await.unwrap();
+        add_food_pairing(&db, wine.wine_id, "grilled salmon")
+            .await
+            .unwrap();
+
+        let results = search_wines_by_food(&db, "salmon").await.unwrap();
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].wine_id, wine.wine_id);
+    }
+
+    #[tokio::test]
+    async fn test_search_wines_by_food_no_match() {
+        let db = setup_db().await;
+        let wine = add_wine(&db, "Some Wine", 2021).await.unwrap();
+        add_food_pairing(&db, wine.wine_id, "grilled salmon")
+            .await
+            .unwrap();
+
+        let results = search_wines_by_food(&db, "xyz_no_match").await.unwrap();
+        assert!(results.is_empty());
+    }
+
+    #[tokio::test]
+    async fn test_search_partial_match() {
+        let db = setup_db().await;
+        let wine = add_wine(&db, "Some Wine", 2021).await.unwrap();
+        add_food_pairing(&db, wine.wine_id, "grilled salmon")
+            .await
+            .unwrap();
+
+        let results = search_wines_by_food(&db, "sal").await.unwrap();
+        assert_eq!(results.len(), 1);
+    }
+
+    #[tokio::test]
+    async fn test_search_special_chars_treated_as_literal() {
+        let db = setup_db().await;
+        let wine = add_wine(&db, "Some Wine", 2021).await.unwrap();
+        add_food_pairing(&db, wine.wine_id, "steak").await.unwrap();
+
+        // '%' should not match everything — should match nothing since no pairing contains "%"
+        let results = search_wines_by_food(&db, "%").await.unwrap();
+        assert!(results.is_empty());
+    }
 }

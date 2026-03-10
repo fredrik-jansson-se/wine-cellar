@@ -99,6 +99,22 @@ pub async fn run(db: sqlx::SqlitePool) -> anyhow::Result<()> {
             "/wine-table-body",
             axum::routing::get(markup::wine_table_body),
         )
+        .route(
+            "/wines/{wine_id}/pairings",
+            axum::routing::get(markup::edit_wine_pairings).post(handlers::add_food_pairing),
+        )
+        .route(
+            "/wines/{wine_id}/pairings/{pairing_id}",
+            axum::routing::delete(handlers::remove_food_pairing),
+        )
+        .route(
+            "/pairings/search",
+            axum::routing::get(handlers::pairings_search),
+        )
+        .route(
+            "/pairings/search/results",
+            axum::routing::get(handlers::pairings_search_results),
+        )
         .with_state(state)
         .layer(axum_tracing_opentelemetry::middleware::OtelInResponseLayer)
         .layer(axum_tracing_opentelemetry::middleware::OtelAxumLayer::default());

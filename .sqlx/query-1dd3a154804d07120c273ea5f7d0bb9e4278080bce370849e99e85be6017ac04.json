@@ -1,0 +1,20 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT food FROM wine_food_pairings WHERE wine_id = $1 ORDER BY id",
+  "describe": {
+    "columns": [
+      {
+        "name": "food",
+        "ordinal": 0,
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "1dd3a154804d07120c273ea5f7d0bb9e4278080bce370849e99e85be6017ac04"
+}

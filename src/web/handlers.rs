@@ -4,6 +4,82 @@ use image::GenericImageView;
 
 use crate::{db, web::AppError};
 
+// ── Food Pairings ────────────────────────────────────────────────────────────
+
+#[derive(serde::Deserialize, Debug)]
+pub(crate) struct AddFoodPairing {
+    food: String,
+}
+
+#[tracing::instrument(skip(state))]
+pub(crate) async fn add_food_pairing(
+    axum::extract::State(state): axum::extract::State<State>,
+    axum::extract::Path(wine_id): axum::extract::Path<i64>,
+    axum::extract::Form(form): axum::extract::Form<AddFoodPairing>,
+) -> MDResult {
+    let food = form.food.trim();
+    if food.is_empty() {
+        return Err(AppError::bad_request(anyhow::anyhow!(
+            "Food pairing cannot be empty"
+        )));
+    }
+    if food.len() > 100 {
+        return Err(AppError::bad_request(anyhow::anyhow!(
+            "Food pairing must be 100 characters or less"
+        )));
+    }
+    match db::add_food_pairing(&state.db, wine_id, food).await {
+        Ok(_) => {}
+        Err(e) => {
+            if let Some(sqlx::Error::Database(db_err)) = e.downcast_ref::<sqlx::Error>()
+                && db_err.is_unique_violation()
+            {
+                return Err(AppError::bad_request(anyhow::anyhow!(
+                    "This food pairing already exists for this wine"
+                )));
+            }
+            return Err(e.into());
+        }
+    }
+    let pairings = db::get_wine_food_pairings(&state.db, wine_id).await?;
+    Ok(super::markup::food_pairings_list_items(&pairings, wine_id))
+}
+
+#[tracing::instrument(skip(state))]
+pub(crate) async fn remove_food_pairing(
+    axum::extract::State(state): axum::extract::State<State>,
+    axum::extract::Path((wine_id, pairing_id)): axum::extract::Path<(i64, i64)>,
+) -> MDResult {
+    db::remove_food_pairing(&state.db, pairing_id, wine_id).await?;
+    let pairings = db::get_wine_food_pairings(&state.db, wine_id).await?;
+    Ok(super::markup::food_pairings_list_items(&pairings, wine_id))
+}
+
+// ── Pairings Search ──────────────────────────────────────────────────────────
+
+#[tracing::instrument]
+pub(crate) async fn pairings_search() -> MDResult {
+    Ok(super::markup::pairings_search_page())
+}
+
+#[derive(serde::Deserialize, Debug)]
+pub(crate) struct PairingsSearchQuery {
+    q: Option<String>,
+}
+
+#[tracing::instrument(skip(state))]
+pub(crate) async fn pairings_search_results(
+    axum::extract::State(state): axum::extract::State<State>,
+    axum::extract::Query(query): axum::extract::Query<PairingsSearchQuery>,
+) -> MDResult {
+    let q = query.q.as_deref().unwrap_or("").trim();
+    if q.is_empty() {
+        return Ok(super::markup::pairings_search_prompt());
+    }
+    let wines = db::search_wines_by_food(&state.db, q).await?;
+    Ok(super::markup::pairings_search_results_markup(&wines, q))
+}
+
 #[derive(serde::Deserialize, Debug)]
 pub(crate) struct AddWine {
     name: String,

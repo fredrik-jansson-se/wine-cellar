@@ -1,0 +1,32 @@
+{
+  "db_name": "SQLite",
+  "query": "SELECT DISTINCT w.wine_id, w.name, w.year\n           FROM wines w\n           JOIN wine_food_pairings fp ON fp.wine_id = w.wine_id\n           WHERE fp.food LIKE $1 ESCAPE '\\'\n           ORDER BY w.name, w.year",
+  "describe": {
+    "columns": [
+      {
+        "name": "wine_id",
+        "ordinal": 0,
+        "type_info": "Integer"
+      },
+      {
+        "name": "name",
+        "ordinal": 1,
+        "type_info": "Text"
+      },
+      {
+        "name": "year",
+        "ordinal": 2,
+        "type_info": "Integer"
+      }
+    ],
+    "parameters": {
+      "Right": 1
+    },
+    "nullable": [
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "c3ee08b6aa6b181c68a43d322a8b8a94727640b5ee3b64fa9ad0b95ff308309c"
+}

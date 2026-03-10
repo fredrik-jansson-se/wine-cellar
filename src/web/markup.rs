@@ -187,6 +187,11 @@ pub(crate) async fn wine_table_row(
                             hx-get=(format!("/wines/{}/grapes", w.id))
                             { "Grapes" } }
                         li { a class="dropdown-item"
+                            hx-target="#main"
+                            hx-target-error="#error"
+                            hx-get=(format!("/wines/{}/pairings", w.id))
+                            { "Pairings" } }
+                        li { a class="dropdown-item"
                             hx-trigger="click"
                             hx-target="#main"
                             hx-target-error="#error"
@@ -220,10 +225,7 @@ pub(crate) struct WineTableBody {
     grape_filter: Option<String>,
 }
 
-async fn render_wine_rows(
-    state: &crate::web::StateInner,
-    grape_filter: Option<&str>,
-) -> MDResult {
+async fn render_wine_rows(state: &crate::web::StateInner, grape_filter: Option<&str>) -> MDResult {
     let wines = db::wines(&state.db).await?;
     Ok(maud::html! {
         @for wine in wines {
@@ -245,6 +247,13 @@ fn wine_table_html(body: Option<Markup>) -> Markup {
     maud::html! {
         (page_header("Wine Cellar"))
         a href="#" data-bs-toggle="modal" data-bs-target="#addWineModal" {"Add Wine"}
+        " "
+        a href="#"
+          class="ms-2"
+          hx-get="/pairings/search"
+          hx-target="#main"
+          hx-target-error="#error"
+        { "Food Pairings Search" }
         div id="error" {}
         table class="table table-striped" {
             thead {
@@ -453,6 +462,135 @@ pub(crate) async fn upload_wine_image(
             hx-post=(format!("/wines/{wine_id}/image")) {
            input type="file" name="image";
            input type="submit" value="Upload" class="btn btn-primary" {}
+        }
+    }
+}
+
+// ── Food Pairings ────────────────────────────────────────────────────────────
+
+/// Renders the `<li>` items for the food pairings list (partial used by add/remove handlers).
+/// The caller is responsible for the outer `<ul id="food-pairings-list">`.
+pub(crate) fn food_pairings_list_items(pairings: &[db::FoodPairing], wine_id: i64) -> Markup {
+    maud::html! {
+        @if pairings.is_empty() {
+            li class="list-group-item text-muted" { "No pairings added yet." }
+        } @else {
+            @for pairing in pairings {
+                li class="list-group-item d-flex justify-content-between align-items-center"
+                   id=(format!("pairing-{}", pairing.id))
+                {
+                    span { (pairing.food) }
+                    button
+                        class="btn btn-sm btn-outline-danger"
+                        hx-delete=(format!("/wines/{}/pairings/{}", wine_id, pairing.id))
+                        hx-target="#food-pairings-list"
+                        hx-swap="innerHTML"
+                        hx-target-error="#error"
+                        hx-confirm="Remove this pairing?"
+                    { "Remove" }
+                }
+            }
+        }
+    }
+}
+
+#[tracing::instrument(skip(state))]
+pub(crate) async fn edit_wine_pairings(
+    axum::extract::State(state): axum::extract::State<State>,
+    axum::extract::Path(wine_id): axum::extract::Path<i64>,
+) -> MDResult {
+    let wine = db::get_wine(&state.db, wine_id).await?;
+    let pairings = db::get_wine_food_pairings(&state.db, wine_id).await?;
+    Ok(maud::html! {
+        (page_header(&format!("Food Pairings — {}", wine.name)))
+        div id="error" {}
+        button class="btn btn-secondary mb-3"
+            hx-get="/wines"
+            hx-target="#main"
+            hx-trigger="click"
+        { "← Back" }
+        ul id="food-pairings-list" class="list-group mb-3" {
+            (food_pairings_list_items(&pairings, wine_id))
+        }
+        form
+            hx-post=(format!("/wines/{}/pairings", wine_id))
+            hx-target="#food-pairings-list"
+            hx-swap="innerHTML"
+            hx-target-error="#error"
+            class="d-flex gap-2"
+        {
+            input
+                name="food"
+                type="text"
+                class="form-control"
+                placeholder="e.g. grilled salmon"
+                maxlength="100"
+                required
+            {}
+            button type="submit" class="btn btn-primary" { "Add Pairing" }
+        }
+    })
+}
+
+// ── Pairings Search ──────────────────────────────────────────────────────────
+
+pub(crate) fn pairings_search_page() -> Markup {
+    maud::html! {
+        (page_header("Food Pairings Search"))
+        div id="error" {}
+        button class="btn btn-secondary mb-3"
+            hx-get="/wines"
+            hx-target="#main"
+            hx-trigger="click"
+        { "← Back" }
+        div class="mb-3" {
+            input
+                name="q"
+                type="text"
+                class="form-control"
+                placeholder="Enter a food to find matching wines"
+                hx-get="/pairings/search/results"
+                hx-target="#search-results"
+                hx-swap="innerHTML"
+                hx-target-error="#error"
+                hx-trigger="input changed delay:500ms, keyup[key=='Enter']"
+            {}
+        }
+        div id="search-results" {
+            (pairings_search_prompt())
+        }
+    }
+}
+
+pub(crate) fn pairings_search_prompt() -> Markup {
+    maud::html! {
+        p class="text-muted" { "Enter a food to find matching wines." }
+    }
+}
+
+pub(crate) fn pairings_search_results_markup(wines: &[db::WineWithPairings], q: &str) -> Markup {
+    maud::html! {
+        @if wines.is_empty() {
+            p class="text-muted" { "No wines found matching \"" (q) "\"." }
+        } @else {
+            @for wine in wines {
+                div class="card mb-2" {
+                    div class="card-body" {
+                        h5 class="card-title" {
+                            (wine.name)
+                            " "
+                            span class="text-muted fw-normal" { "(" (wine.year) ")" }
+                        }
+                        p class="card-text" {
+                            "Pairings: "
+                            @for (i, pairing) in wine.matched_pairings.iter().enumerate() {
+                                @if i > 0 { ", " }
+                                (pairing)
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 }
