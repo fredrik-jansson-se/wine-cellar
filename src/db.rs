@@ -21,6 +21,8 @@ pub(crate) struct Wine {
     pub name: String,
     pub year: i64,
     pub has_image: bool,
+    pub comment: Option<String>,
+    pub comment_updated_at: Option<chrono::NaiveDateTime>,
 }
 
 #[derive(sqlx::FromRow, Debug)]
@@ -44,26 +46,30 @@ pub(crate) async fn connect() -> anyhow::Result<sqlx::SqlitePool> {
 
 #[tracing::instrument(skip(db))]
 pub(crate) async fn wines(db: &sqlx::SqlitePool) -> anyhow::Result<Vec<Wine>> {
-    let res = sqlx::query!("SELECT wine_id, name, year, image IS NOT NULL AS has_image from wines")
-        .fetch_all(db)
-        .await?
-        .into_iter()
-        // Not sure why we need this conversation here, but not below where we fetch a single
-        // wine
-        .map(|r| Wine {
-            wine_id: r.wine_id, //.wine_id.expect("Will always have id"),
-            name: r.name,
-            year: r.year,
-            has_image: r.has_image != 0,
-        })
-        .collect();
+    let res = sqlx::query!(
+        "SELECT wine_id, name, year, image IS NOT NULL AS has_image, comment, comment_updated_at from wines"
+    )
+    .fetch_all(db)
+    .await?
+    .into_iter()
+    // Not sure why we need this conversation here, but not below where we fetch a single
+    // wine
+    .map(|r| Wine {
+        wine_id: r.wine_id, //.wine_id.expect("Will always have id"),
+        name: r.name,
+        year: r.year,
+        has_image: r.has_image != 0,
+        comment: r.comment,
+        comment_updated_at: r.comment_updated_at,
+    })
+    .collect();
     Ok(res)
 }
 
 #[tracing::instrument(skip(db))]
 pub(crate) async fn get_wine(db: &sqlx::SqlitePool, id: i64) -> anyhow::Result<Wine> {
     let res = sqlx::query!(
-        "SELECT wine_id, name, year, image IS NOT NULL AS has_image from wines WHERE wine_id=$1",
+        "SELECT wine_id, name, year, image IS NOT NULL AS has_image, comment, comment_updated_at from wines WHERE wine_id=$1",
         id
     )
     .fetch_one(db)
@@ -73,6 +79,8 @@ pub(crate) async fn get_wine(db: &sqlx::SqlitePool, id: i64) -> anyhow::Result<W
         name: res.name,
         year: res.year,
         has_image: res.has_image != 0,
+        comment: res.comment,
+        comment_updated_at: res.comment_updated_at,
     })
 }
 
@@ -108,9 +116,6 @@ pub(crate) async fn add_wine(db: &sqlx::SqlitePool, name: &str, year: i64) -> an
 pub(crate) async fn delete_wine(db: &sqlx::SqlitePool, wine_id: i64) -> anyhow::Result<()> {
     let mut trans = db.begin().await?;
     sqlx::query!("DELETE FROM wine_food_pairings WHERE wine_id=$1", wine_id)
-        .execute(&mut *trans)
-        .await?;
-    sqlx::query!("DELETE FROM wine_comments WHERE wine_id=$1", wine_id)
         .execute(&mut *trans)
         .await?;
     sqlx::query!("DELETE FROM wine_grapes WHERE wine_id=$1", wine_id)
@@ -198,53 +203,19 @@ pub(crate) async fn set_wine_image(
     Ok(())
 }
 
-#[derive(Debug, sqlx::FromRow)]
-pub(crate) struct WineComment {
-    pub comment: String,
-    pub dt: chrono::NaiveDateTime,
-}
-
+/// Sets (or clears) the single comment on a wine.
+/// Pass `None` for `text` to clear the note; `dt` should be `None` when clearing.
 #[tracing::instrument(skip(db))]
-pub(crate) async fn wine_comments(
+pub(crate) async fn set_wine_comment(
     db: &sqlx::SqlitePool,
     wine_id: i64,
-) -> anyhow::Result<Vec<WineComment>> {
-    let res = sqlx::query_as!(
-        WineComment,
-        "SELECT comment,dt FROM wine_comments WHERE wine_id=$1 ORDER by dt DESC",
-        wine_id
-    )
-    .fetch_all(db)
-    .await?;
-    Ok(res)
-}
-
-#[tracing::instrument(skip(db))]
-pub(crate) async fn last_wine_comment(
-    db: &sqlx::SqlitePool,
-    wine_id: i64,
-) -> anyhow::Result<Option<WineComment>> {
-    let res = sqlx::query_as!(
-        WineComment,
-        "SELECT comment,dt FROM wine_comments WHERE wine_id=$1 ORDER by dt DESC LIMIT 1",
-        wine_id
-    )
-    .fetch_optional(db)
-    .await?;
-    Ok(res)
-}
-
-#[tracing::instrument(skip(db))]
-pub(crate) async fn add_wine_comment(
-    db: &sqlx::SqlitePool,
-    wine_id: i64,
-    comment: &str,
-    dt: chrono::NaiveDateTime,
+    text: Option<&str>,
+    dt: Option<chrono::NaiveDateTime>,
 ) -> anyhow::Result<()> {
     sqlx::query!(
-        "INSERT INTO wine_comments (wine_id, comment, dt) VALUES ($1, $2, $3)",
+        "UPDATE wines SET comment=$2, comment_updated_at=$3 WHERE wine_id=$1",
         wine_id,
-        comment,
+        text,
         dt
     )
     .execute(db)
@@ -396,6 +367,41 @@ mod tests {
             .expect("connect to in-memory DB");
         sqlx::migrate!().run(&pool).await.expect("run migrations");
         pool
+    }
+
+    #[tokio::test]
+    async fn test_set_wine_comment() {
+        let db = setup_db().await;
+        let wine = add_wine(&db, "Commented Wine", 2020).await.unwrap();
+        let now = chrono::NaiveDateTime::parse_from_str("2026-03-10 12:00:00", "%Y-%m-%d %H:%M:%S")
+            .unwrap();
+
+        // Set a comment
+        set_wine_comment(&db, wine.wine_id, Some("Great wine"), Some(now))
+            .await
+            .unwrap();
+        let w = get_wine(&db, wine.wine_id).await.unwrap();
+        assert_eq!(w.comment.as_deref(), Some("Great wine"));
+        assert_eq!(w.comment_updated_at, Some(now));
+    }
+
+    #[tokio::test]
+    async fn test_clear_wine_comment() {
+        let db = setup_db().await;
+        let wine = add_wine(&db, "Clear Wine", 2021).await.unwrap();
+        let now = chrono::NaiveDateTime::parse_from_str("2026-03-10 12:00:00", "%Y-%m-%d %H:%M:%S")
+            .unwrap();
+
+        set_wine_comment(&db, wine.wine_id, Some("Temporary note"), Some(now))
+            .await
+            .unwrap();
+        // Clear the comment
+        set_wine_comment(&db, wine.wine_id, None, None)
+            .await
+            .unwrap();
+        let w = get_wine(&db, wine.wine_id).await.unwrap();
+        assert!(w.comment.is_none());
+        assert!(w.comment_updated_at.is_none());
     }
 
     #[tokio::test]

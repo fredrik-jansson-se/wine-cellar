@@ -114,13 +114,12 @@ pub(crate) async fn wine_table_row(
     }
     let inv_events = db::wine_inventory_events(&state.db, wine.wine_id).await?;
     let inventory: i64 = inv_events.iter().map(|ie| ie.bottles).sum();
-    let last_comment = db::last_wine_comment(&state.db, wine.wine_id).await?;
     let w = MainWine {
         id: wine.wine_id,
-        name: wine.name,
+        name: wine.name.clone(),
         year: wine.year,
         num_bottles: inventory,
-        last_comment: last_comment.map(|c| c.comment),
+        last_comment: wine.comment.clone(),
         grapes: wine_grapes,
         has_image: wine.has_image,
     };
@@ -172,13 +171,6 @@ pub(crate) async fn wine_table_row(
                             hx-target-error="#error"
                             hx-get=(format!("/wines/{}/buy", w.id))
                             { "Buy" }
-                        }
-
-                        li { a class="dropdown-item"
-                            hx-target="#main"
-                            hx-target-error="#error"
-                            hx-get=(format!("/wines/{}/comment", w.id))
-                            { "Comment" }
                         }
 
                         li { a class="dropdown-item"
@@ -312,7 +304,6 @@ pub(crate) async fn wine_information(
     tracing::info!("enter");
     let wine = db::get_wine(&state.db, wine_id).await?;
     let events = db::wine_inventory_events(&state.db, wine_id).await?;
-    let comments = db::wine_comments(&state.db, wine_id).await?;
     Ok(maud::html! {
         (page_header(&wine.name))
         a href="/" { "Back" }
@@ -335,17 +326,62 @@ pub(crate) async fn wine_information(
                     }
                   }
                 }
-                h3 { "Comments" }
-                @for comment in comments {
-                    h4 { (comment.dt.date()) }
-                    p { (comment.comment) }
-                }
+                h3 { "Note" }
+                (note_read_view(&wine))
             }
             div class="col" {
                 img src=(format!("/wines/{wine_id}/image"));
             }
         }
     })
+}
+
+/// Renders the read-only note partial for a wine. Used on the detail page and returned by
+/// GET /wines/{id}/comment and POST /wines/{id}/comment on success.
+pub(crate) fn note_read_view(wine: &db::Wine) -> Markup {
+    let wine_id = wine.wine_id;
+    maud::html! {
+        div id=(format!("wine-note-{wine_id}")) {
+            @if let Some(ref text) = wine.comment {
+                p { (text) }
+                @if let Some(ref updated_at) = wine.comment_updated_at {
+                    p class="text-muted small" { "Last updated: " (updated_at.date()) }
+                }
+            } @else {
+                p class="text-muted" { "Add a note…" }
+            }
+            button class="btn btn-sm btn-outline-secondary"
+                hx-get=(format!("/wines/{wine_id}/comment/edit"))
+                hx-target=(format!("#wine-note-{wine_id}"))
+                hx-swap="outerHTML"
+            { "✏ Edit" }
+        }
+    }
+}
+
+/// Renders the inline edit form for the note. Used by GET /wines/{id}/comment/edit and
+/// returned by POST /wines/{id}/comment on DB error (edit mode stays open with text preserved).
+pub(crate) fn note_edit_form(wine_id: i64, current_text: &str, error: Option<&str>) -> Markup {
+    maud::html! {
+        div id=(format!("wine-note-{wine_id}")) {
+            @if let Some(msg) = error {
+                div class="alert alert-danger" role="alert" { (msg) }
+            }
+            form
+                hx-post=(format!("/wines/{wine_id}/comment"))
+                hx-target=(format!("#wine-note-{wine_id}"))
+                hx-swap="outerHTML"
+            {
+                textarea name="comment" class="form-control mb-2" rows="4" { (current_text) }
+                button type="submit" class="btn btn-sm btn-primary me-2" { "Save" }
+                button type="button" class="btn btn-sm btn-secondary"
+                    hx-get=(format!("/wines/{wine_id}/comment"))
+                    hx-target=(format!("#wine-note-{wine_id}"))
+                    hx-swap="outerHTML"
+                { "Cancel" }
+            }
+        }
+    }
 }
 
 #[tracing::instrument(skip(state))]
@@ -377,23 +413,6 @@ pub(crate) async fn edit_wine_grapes(
             }
         }
     })
-}
-
-pub(crate) async fn add_comment(axum::extract::Path(wine_id): axum::extract::Path<i64>) -> Markup {
-    maud::html! {
-        form id="add-comment" hx-post=(format!("/wines/{wine_id}/comment")) hx-target="#main" {
-            div class="mb-3" {
-                label for="comment" class="form-label" { "Comment" }
-                input name="comment" id="comment" class="form-control" {}
-            }
-            div class="mb-3" {
-                input type="submit" value="Add" class="btn btn-primary me-3" {}
-                button hx-trigger="click" hx-target="#main" hx-get="/" class="btn btn-secondary" {
-                    "Cancel"
-                }
-            }
-        }
-    }
 }
 
 pub(crate) async fn consume_wine(axum::extract::Path(wine_id): axum::extract::Path<i64>) -> Markup {

@@ -1,0 +1,12 @@
+{
+  "db_name": "SQLite",
+  "query": "UPDATE wines SET comment=$2, comment_updated_at=$3 WHERE wine_id=$1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Right": 3
+    },
+    "nullable": []
+  },
+  "hash": "790ad000155d9e6a491fe219578c969cb304f01d2018371acbb40429d68e78e9"
+}
