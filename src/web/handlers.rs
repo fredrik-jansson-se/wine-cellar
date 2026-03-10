@@ -117,20 +117,56 @@ pub(crate) async fn post_wine_grapes(
     super::markup::wine_table_populated(&state).await
 }
 
+#[tracing::instrument(skip(state))]
+pub(crate) async fn get_note(
+    axum::extract::State(state): axum::extract::State<State>,
+    axum::extract::Path(wine_id): axum::extract::Path<i64>,
+) -> MDResult {
+    let wine = db::get_wine(&state.db, wine_id).await?;
+    Ok(super::markup::note_read_view(&wine))
+}
+
+#[tracing::instrument(skip(state))]
+pub(crate) async fn get_note_edit(
+    axum::extract::State(state): axum::extract::State<State>,
+    axum::extract::Path(wine_id): axum::extract::Path<i64>,
+) -> MDResult {
+    let wine = db::get_wine(&state.db, wine_id).await?;
+    Ok(super::markup::note_edit_form(
+        wine_id,
+        wine.comment.as_deref().unwrap_or(""),
+        None,
+    ))
+}
+
 #[derive(serde::Deserialize, Debug)]
-pub(crate) struct AddComment {
+pub(crate) struct SaveComment {
     comment: String,
 }
 
 #[tracing::instrument(skip(state))]
-pub(crate) async fn add_comment(
+pub(crate) async fn save_comment(
     axum::extract::State(state): axum::extract::State<State>,
     axum::extract::Path(wine_id): axum::extract::Path<i64>,
-    axum::extract::Form(comment): axum::extract::Form<AddComment>,
+    axum::extract::Form(form): axum::extract::Form<SaveComment>,
 ) -> MDResult {
-    let now = chrono::Local::now().naive_local();
-    db::add_wine_comment(&state.db, wine_id, &comment.comment, now).await?;
-    super::markup::wine_table_populated(&state).await
+    let text = form.comment.trim();
+    let (comment_value, dt) = if text.is_empty() {
+        (None, None)
+    } else {
+        (Some(text), Some(chrono::Local::now().naive_local()))
+    };
+    match db::set_wine_comment(&state.db, wine_id, comment_value, dt).await {
+        Ok(()) => {
+            let wine = db::get_wine(&state.db, wine_id).await?;
+            Ok(super::markup::note_read_view(&wine))
+        }
+        Err(e) => Ok(super::markup::note_edit_form(
+            wine_id,
+            text,
+            Some(&e.to_string()),
+        )),
+    }
 }
 
 #[derive(serde::Deserialize, Debug)]

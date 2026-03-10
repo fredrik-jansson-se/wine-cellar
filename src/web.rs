@@ -59,11 +59,11 @@ pub async fn run(db: sqlx::SqlitePool) -> anyhow::Result<()> {
         )
         .route(
             "/wines/{wine_id}/comment",
-            axum::routing::get(markup::add_comment),
+            axum::routing::get(handlers::get_note).post(handlers::save_comment),
         )
         .route(
-            "/wines/{wine_id}/comment",
-            axum::routing::post(handlers::add_comment),
+            "/wines/{wine_id}/comment/edit",
+            axum::routing::get(handlers::get_note_edit),
         )
         .route(
             "/wines/{wine_id}/consume",

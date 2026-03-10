@@ -1,6 +1,6 @@
 {
   "db_name": "SQLite",
-  "query": "SELECT wine_id, name, year, image IS NOT NULL AS has_image from wines WHERE wine_id=$1",
+  "query": "SELECT wine_id, name, year, image IS NOT NULL AS has_image, comment, comment_updated_at from wines WHERE wine_id=$1",
   "describe": {
     "columns": [
       {
@@ -22,6 +22,16 @@
         "name": "has_image",
         "ordinal": 3,
         "type_info": "Integer"
+      },
+      {
+        "name": "comment",
+        "ordinal": 4,
+        "type_info": "Text"
+      },
+      {
+        "name": "comment_updated_at",
+        "ordinal": 5,
+        "type_info": "Datetime"
       }
     ],
     "parameters": {
@@ -31,8 +41,10 @@
       false,
       false,
       false,
-      false
+      false,
+      true,
+      true
     ]
   },
-  "hash": "3c301ed23f585a74c2b7f22576622f80d9f05e148c100612a177412076783c3d"
+  "hash": "e92745ca1737c3ebc4bcd4206744ad39d4ce68d7ece3bb1b0757b1a2a5432d4d"
 }
