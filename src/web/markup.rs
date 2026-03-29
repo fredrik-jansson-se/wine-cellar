@@ -109,18 +109,17 @@ pub(crate) async fn wine_table_row(
         year: i64,
         num_bottles: i64,
         last_comment: Option<String>,
-        grapes: Vec<String>,
         has_image: bool,
     }
     let inv_events = db::wine_inventory_events(&state.db, wine.wine_id).await?;
     let inventory: i64 = inv_events.iter().map(|ie| ie.bottles).sum();
+    let food_pairings = db::get_wine_food_pairings(&state.db, wine.wine_id).await?;
     let w = MainWine {
         id: wine.wine_id,
         name: wine.name.clone(),
         year: wine.year,
         num_bottles: inventory,
         last_comment: wine.comment.clone(),
-        grapes: wine_grapes,
         has_image: wine.has_image,
     };
 
@@ -146,10 +145,8 @@ pub(crate) async fn wine_table_row(
             }
             td {
                 ul {
-                    @for grape in w.grapes {
-                        li {
-                            (grape)
-                        }
+                    @for pairing in &food_pairings {
+                        li { (pairing.food) }
                     }
                 }
             }
@@ -256,7 +253,7 @@ fn wine_table_html(body: Option<Markup>) -> Markup {
                     th scope="col" { "Bottles" }
                     th scope="col" { "Comment" }
                     th scope="col" {
-                        "Grapes"
+                        "Pairings"
                         svg xmlns="http://www.w3.org/2000/svg" width="16" height="16"
                             fill="currentColor" class="bi bi-filter" viewBox="0 0 16 16"
                             data-bs-toggle="collapse" data-bs-target="#filterGrapes"
